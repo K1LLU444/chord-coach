@@ -17,7 +17,6 @@ const MODES = [
   ['piano', 'Play it'],
   ['name', 'Name it'],
   ['ear', 'Hear it'],
-  ['mark', 'Both hands'],
 ];
 const MAX_BOX = 5; // Leitner boxes: 1 = keeps coming back, 5 = mastered
 
@@ -30,6 +29,7 @@ const shuffle = a => {
 };
 
 export function quizView() {
+  if (settings.quizMode === 'mark') settings.quizMode = 'find'; // the old "Both hands" mode is now "Find the keys"
   let progress = load('quiz', {});
   const session = { right: 0, total: 0, streak: 0 };
   let card = null;
@@ -41,7 +41,7 @@ export function quizView() {
 
   const cards = () => POOLS[settings.quizPool].types.flatMap(t => ROOTS.map(r => makeChord(r, TYPE_BY_ID[t])));
   // Ear training is tracked separately: recognising a chord by sound is a different skill from finding it.
-  const PREFIX = { ear: 'ear:', mark: 'mark:' };
+  const PREFIX = { ear: 'ear:' };
   const keyOf = c => (PREFIX[settings.quizMode] || '') + c.id;
   const boxOf = c => progress[keyOf(c)]?.box || 0;
 
@@ -93,51 +93,7 @@ export function quizView() {
     if (settings.quizMode === 'find') findMode();
     else if (settings.quizMode === 'piano') pianoMode();
     else if (settings.quizMode === 'ear') earMode();
-    else if (settings.quizMode === 'mark') markMode();
     else nameMode();
-  }
-
-  // Tap the right-hand notes on the screen keyboard (any octave, any order).
-  function findMode() {
-    const picks = new Set();
-    let done = false;
-    const kb = h('div', { class: 'kb-box' });
-    const feedback = h('div', { class: 'feedback' });
-    const actions = h('div', { class: 'row' });
-
-    const draw = () => {
-      const marks = new Map([...picks].map(m => [m, done ? (card.pcs.includes(m % 12) ? 'right' : 'wrong') : 'pick']));
-      const label = done ? noteLabeler(card) : m => noteName(m);
-      renderPanel(kb, {
-        ...RH_RANGE, marks, label, showAll: settings.showAll,
-        onKey: m => {
-          playNote(m);
-          if (done) return;
-          picks.has(m) ? picks.delete(m) : picks.add(m);
-          draw();
-        },
-      });
-    };
-
-    const check = () => {
-      if (!picks.size) return;
-      const chosen = new Set([...picks].map(m => m % 12));
-      const ok = chosen.size === card.pcs.length && card.pcs.every(pc => chosen.has(pc));
-      done = true;
-      grade(ok);
-      draw();
-      reveal();
-      feedback.replaceChildren(
-        h('p', { class: ok ? 'good' : 'bad' }, ok ? '✓ Correct!' : `Not quite. ${card.symbol} is ${card.notes.join(' + ')}.`),
-        answerBoard());
-      actions.replaceChildren(nextBtn());
-    };
-
-    actions.replaceChildren(
-      h('button', { type: 'button', class: 'btn', onclick: () => { picks.clear(); draw(); } }, 'Clear'),
-      h('button', { type: 'button', class: 'btn primary', onclick: check }, 'Check'));
-    draw();
-    stage.replaceChildren(prompt('Tap the right-hand keys for'), kb, actions, feedback);
   }
 
   // Play it on the real piano, then reveal and be honest.
@@ -200,9 +156,9 @@ export function quizView() {
       feedback);
   }
 
-  // Mark the keys from memory on one keyboard: pick Blue (left hand) or Orange (right hand), then tap keys.
+  // Find the keys from memory on one keyboard: pick Blue (left hand) or Orange (right hand), then tap keys.
   // Three wrong checks and the answer is shown. The music sheet is an optional hint, and shows with the answer.
-  function markMode() {
+  function findMode() {
     const MAX_STRIKES = 3;
     const lhGoal = lhPattern(card);
     const rhGoal = rhVoicing(card);
@@ -307,7 +263,7 @@ export function quizView() {
     drawBrushes();
     draw();
     stage.replaceChildren(
-      prompt('Mark the keys for'),
+      prompt('Find the keys for'),
       h('p', { class: 'muted small mark-hint' },
         `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
       sheet, strikesEl, brushes, scroller, overview, message, actions);
@@ -374,7 +330,7 @@ export function quizView() {
     const types = POOLS[settings.quizPool].types.map(t => TYPE_BY_ID[t]);
     mastery.replaceChildren(
       h('div', { class: 'row between' },
-        h('h3', {}, { ear: 'Your progress (by ear)', mark: 'Your progress (both hands)' }[settings.quizMode] || 'Your progress'),
+        h('h3', {}, settings.quizMode === 'ear' ? 'Your progress (by ear)' : 'Your progress'),
         h('button', {
           type: 'button',
           class: 'btn small',

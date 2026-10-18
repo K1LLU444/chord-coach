@@ -8,7 +8,7 @@ Runs in the browser on Mac and iPhone (add it to the home screen to use it like 
 - **Songs**: paste chords (plain, bars, `[Chorus]` sections, chords-over-lyrics, ChordPro). Step through them:
   hover or ← → on Mac; tap, swipe the keyboard or slide a finger along the chords on iPhone.
   "Smooth hand movement" picks inversions so your right hand barely moves; dashed keys preview the next chord.
-- **Quiz**: Find the keys / Play it on your piano / Name it, with spaced repetition and a progress grid.
+- **Quiz**: Find the keys (mark both hands on one keyboard, 3 strikes, optional music-sheet hint) / Play it on your piano / Name it / Hear it, with spaced repetition and a progress grid.
 
 ### Songs from Ultimate Guitar
 
