@@ -317,3 +317,44 @@ export function ugToText(content, capo = 0) {
   dropEmptySection();
   return out.join('\n').trim();
 }
+
+/**
+ * Compare keys marked on a keyboard with a chord's answer. marks: Map(midi → 'lh' | 'rh').
+ * Left hand must be root → 5th → octave (low to high) but may sit in any octave.
+ * Right hand needs exactly the chord's notes, in any octave or order (so any inversion works).
+ */
+export function gradeMarks(chord, marks) {
+  const blue = [...marks].filter(([, hand]) => hand === 'lh').map(([m]) => m).sort((a, b) => a - b);
+  const orange = [...marks].filter(([, hand]) => hand === 'rh').map(([m]) => m);
+  const goal = lhPattern(chord);
+
+  const pool = goal.map(m => m % 12);
+  let lhRight = 0;
+  for (const m of blue) {
+    const i = pool.indexOf(m % 12);
+    if (i > -1) {
+      pool.splice(i, 1);
+      lhRight++;
+    }
+  }
+  const lh = {
+    right: lhRight,
+    wrong: blue.length - lhRight,
+    missing: goal.length - lhRight,
+    shape: blue.length === goal.length && blue.every((m, i) => m - blue[0] === goal[i] - goal[0]) && blue[0] % 12 === goal[0] % 12,
+  };
+
+  const found = new Set(orange.map(m => m % 12).filter(pc => chord.pcs.includes(pc))).size;
+  const rh = {
+    right: found,
+    wrong: orange.filter(m => !chord.pcs.includes(m % 12)).length,
+    missing: chord.pcs.length - found,
+  };
+
+  return {
+    empty: marks.size === 0,
+    ok: lh.shape && !lh.wrong && !lh.missing && !rh.wrong && !rh.missing,
+    lh,
+    rh,
+  };
+}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseChord, lhPattern, rhVoicing, smoothVoicings, parseSong, noteLabeler, enharmonicHints, pcOf, RH_RANGE,
+  parseChord, lhPattern, rhVoicing, smoothVoicings, parseSong, noteLabeler, enharmonicHints, pcOf, RH_RANGE, gradeMarks,
 } from '../js/theory.js';
 
 // The original beginner table: chord → left hand pattern, right hand triad.
@@ -103,4 +103,25 @@ test('guitar tab lines are not read as chords', () => {
   assert.deepEqual(song.chords.map(c => c.symbol), ['Bb', 'Dm', 'F7']);
   assert.deepEqual(parseSong('C | G | Am | F |').chords.map(c => c.symbol), ['C', 'G', 'Am', 'F']);
   assert.deepEqual(parseSong('E | B7 | E').chords.map(c => c.symbol), ['E', 'B7', 'E']);
+});
+
+test('marked keys are graded: any octave and inversion, left hand root → 5th → octave', () => {
+  const marks = (lh, rh) => new Map([...lh.map(m => [m, 'lh']), ...rh.map(m => [m, 'rh'])]);
+  const C = parseChord('C');
+  assert.equal(gradeMarks(C, marks([36, 43, 48], [60, 64, 67])).ok, true);
+  assert.equal(gradeMarks(C, marks([48, 55, 60], [64, 67, 72])).ok, true, 'other octaves and an inversion');
+  assert.equal(gradeMarks(C, marks([36, 43, 48], [60, 64, 67, 72])).ok, true, 'doubled root is fine');
+
+  const order = gradeMarks(C, marks([36, 48, 55], [60, 64, 67]));
+  assert.equal(order.ok, false);
+  assert.deepEqual([order.lh.right, order.lh.wrong, order.lh.missing, order.lh.shape], [3, 0, 0, false]);
+
+  const partial = gradeMarks(C, marks([36], [60, 63, 67]));
+  assert.deepEqual(partial.lh, { right: 1, wrong: 0, missing: 2, shape: false });
+  assert.deepEqual(partial.rh, { right: 2, wrong: 1, missing: 1 });
+  assert.equal(partial.ok, false);
+
+  assert.equal(gradeMarks(C, new Map()).empty, true);
+  assert.equal(gradeMarks(parseChord('Cdim'), marks([36, 42, 48], [60, 63, 66])).ok, true, 'dim has a flat 5th in the left hand');
+  assert.equal(gradeMarks(parseChord('Cmaj7'), marks([36, 43, 48], [60, 64, 67])).ok, false, 'a 7th chord needs its 4th note');
 });

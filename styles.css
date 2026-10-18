@@ -453,6 +453,40 @@ main {
 .options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .options .btn { font-size: 20px; min-height: 54px; display: grid; place-items: center; gap: 0; line-height: 1.15; padding: 8px; }
 .opt-sub { font-size: 12px; font-weight: 500; opacity: 0.7; }
+.mark-hint { margin: 0; text-align: center; }
+.sheet-box { display: grid; gap: 6px; justify-items: center; }
+.sheet-box:empty { display: none; }
+.sheet-box p { margin: 0; text-align: center; }
+.brushes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.brushes[hidden] { display: none; }
+.brush { appearance: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border-radius: 999px; border: 2px solid var(--border); background: var(--surface); color: var(--text); font: 700 15px/1.2 inherit; cursor: pointer; touch-action: manipulation; }
+.brush.lh.active { border-color: var(--lh); background: var(--lh-soft); }
+.brush.rh.active { border-color: var(--rh); background: var(--rh-soft); }
+.kb-scroll { overflow-x: auto; border-radius: 10px; background: var(--key-edge); -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.kb-scroll .kb { min-width: 920px; }
+.strikes { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.strike { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #fff; }
+.strike.used { background: var(--bad); border-color: var(--bad); }
+.sheet-fig { margin: 0; display: grid; gap: 6px; }
+.sheet-fig figcaption { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 8px; font-size: 12px; color: var(--muted); }
+.sheet-fig figcaption .dot + .dot, .sheet-fig figcaption .dot:not(:first-child) { margin-left: 10px; }
+.sheet { display: block; width: 100%; max-width: 520px; height: auto; margin: 0 auto; }
+.sheet .line { stroke: var(--muted); stroke-width: 1.1; opacity: 0.8; }
+.sheet .ledger { stroke: var(--muted); stroke-width: 1.6; }
+.sheet .bar { stroke: var(--muted); stroke-width: 1.2; }
+.sheet .bar.thick { stroke: var(--text); stroke-width: 2.4; }
+.sheet .clef { font: 62px "Apple Symbols", "Noto Music", "Segoe UI Symbol", "Bravura Text", serif; fill: var(--text); }
+.sheet .clef.bass { font-size: 42px; }
+.sheet .time { font: 800 22px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: middle; fill: var(--text); }
+.sheet .chord-symbol { font: 800 24px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; fill: var(--text); }
+.sheet .head { stroke: none; }
+.sheet .head.open { fill: var(--surface); stroke-width: 2.2; }
+.sheet .stem { stroke-width: 1.8; stroke-linecap: round; }
+.sheet .gl { font: 700 8.5px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: end; fill: var(--muted); }
+.sheet .gl.space { font-weight: 500; font-size: 8px; opacity: 0.85; }
+.sheet .gl.used { font-size: 9.5px; font-weight: 800; opacity: 1; }
+.sheet-guide { margin: 0; text-align: center; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.sheet .acc { font: 700 18px "Apple Symbols", "Noto Music", "Segoe UI Symbol", system-ui, sans-serif; text-anchor: end; }
 .ear-icon { font-size: 48px; line-height: 1.2; }
 .ear-tip { margin: 0; text-align: center; }
 

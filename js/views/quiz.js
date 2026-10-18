@@ -1,8 +1,9 @@
 // Quiz tab: flashcards with spaced repetition. Chords you miss come back more often.
 
 import { h, segmented, toggle } from '../dom.js';
-import { CHORD_TYPES, ROOTS, TYPE_BY_ID, RH_RANGE, makeChord, rhVoicing, lhPattern, noteLabeler, noteName } from '../theory.js';
-import { renderBoard, renderPanel } from '../keyboard.js';
+import { CHORD_TYPES, ROOTS, TYPE_BY_ID, LH_RANGE, RH_RANGE, makeChord, rhVoicing, lhPattern, noteLabeler, noteName, gradeMarks } from '../theory.js';
+import { renderBoard, renderPanel, keyboardSVG } from '../keyboard.js';
+import { sheetElement } from '../sheet.js';
 import { playNote, playBoth, playSequence } from '../audio.js';
 import { settings, saveSettings, load, save } from '../store.js';
 
@@ -16,6 +17,7 @@ const MODES = [
   ['piano', 'Play it'],
   ['name', 'Name it'],
   ['ear', 'Hear it'],
+  ['mark', 'Both hands'],
 ];
 const MAX_BOX = 5; // Leitner boxes: 1 = keeps coming back, 5 = mastered
 
@@ -39,7 +41,8 @@ export function quizView() {
 
   const cards = () => POOLS[settings.quizPool].types.flatMap(t => ROOTS.map(r => makeChord(r, TYPE_BY_ID[t])));
   // Ear training is tracked separately: recognising a chord by sound is a different skill from finding it.
-  const keyOf = c => (settings.quizMode === 'ear' ? 'ear:' : '') + c.id;
+  const PREFIX = { ear: 'ear:', mark: 'mark:' };
+  const keyOf = c => (PREFIX[settings.quizMode] || '') + c.id;
   const boxOf = c => progress[keyOf(c)]?.box || 0;
 
   function nextCard() {
@@ -53,10 +56,13 @@ export function quizView() {
     renderStage();
   }
 
-  function grade(ok) {
+  // `assisted`: solved with the hint, so it counts as practice but doesn't level the chord up.
+  function grade(ok, assisted = false) {
     const p = progress[keyOf(card)] || { box: 0, seen: 0, right: 0 };
     p.seen++;
-    if (ok) {
+    if (ok && assisted) {
+      p.box = Math.max(1, p.box);
+    } else if (ok) {
       p.right++;
       p.box = Math.min(MAX_BOX, Math.max(1, p.box) + 1);
     } else {
@@ -65,8 +71,8 @@ export function quizView() {
     progress[keyOf(card)] = p;
     save('quiz', progress);
     session.total++;
-    session.right += ok ? 1 : 0;
-    session.streak = ok ? session.streak + 1 : 0;
+    session.right += ok && !assisted ? 1 : 0;
+    if (!assisted) session.streak = ok ? session.streak + 1 : 0;
     renderStats();
     renderMastery();
   }
@@ -87,6 +93,7 @@ export function quizView() {
     if (settings.quizMode === 'find') findMode();
     else if (settings.quizMode === 'piano') pianoMode();
     else if (settings.quizMode === 'ear') earMode();
+    else if (settings.quizMode === 'mark') markMode();
     else nameMode();
   }
 
@@ -193,6 +200,119 @@ export function quizView() {
       feedback);
   }
 
+  // Mark the keys from memory on one keyboard: pick Blue (left hand) or Orange (right hand), then tap keys.
+  // Three wrong checks and the answer is shown. The music sheet is an optional hint, and shows with the answer.
+  function markMode() {
+    const MAX_STRIKES = 3;
+    const lhGoal = lhPattern(card);
+    const rhGoal = rhVoicing(card);
+    const flats = card.root.includes('b') || card.root === 'F';
+    const range = { from: LH_RANGE.from, to: RH_RANGE.to };
+    const marks = new Map();
+    let brush = 'lh';
+    let strikes = 0;
+    let hinted = false;
+    let done = false;
+
+    const sheet = h('div', { class: 'sheet-box' });
+    const brushes = h('div', { class: 'brushes', role: 'group', 'aria-label': 'Which hand are you marking?' });
+    const strikesEl = h('div', { class: 'strikes' });
+    const scroller = h('div', { class: 'kb-scroll' });
+    const overview = h('div', { class: 'overview' });
+    const message = h('div', { class: 'feedback', 'aria-live': 'polite' });
+    const actions = h('div', { class: 'row' });
+
+    const drawStrikes = () => {
+      strikesEl.setAttribute('aria-label', `${MAX_STRIKES - strikes} of ${MAX_STRIKES} strikes left`);
+      strikesEl.replaceChildren(
+        h('span', { class: 'muted small' }, 'Strikes'),
+        ...Array.from({ length: MAX_STRIKES }, (_, i) => h('span', { class: 'strike' + (i < strikes ? ' used' : '') }, i < strikes ? '✕' : '')));
+    };
+
+    // The keyboard is wider than a phone screen: slide it sideways. Left hand lives on the left half, right hand on the right.
+    const slideTo = hand => scroller.scrollTo({ left: hand === 'lh' ? 0 : scroller.scrollWidth / 2, behavior: 'smooth' });
+    const drawBrushes = () => brushes.replaceChildren(...[['lh', 'Blue · Left'], ['rh', 'Orange · Right']].map(([id, text]) =>
+      h('button', {
+        type: 'button',
+        class: `brush ${id}${brush === id ? ' active' : ''}`,
+        'aria-pressed': String(brush === id),
+        onclick: () => { brush = id; drawBrushes(); slideTo(id); },
+      }, h('span', { class: `dot ${id}` }), text)));
+
+    const drawKeys = (shown, label, onKey) => {
+      renderPanel(scroller, { ...range, marks: shown, label, showAll: settings.showAll, onKey });
+      overview.replaceChildren(
+        keyboardSVG({ ...range, marks: shown, mini: true }),
+        h('p', { class: 'muted small' }, 'Whole keyboard: C2 to B5. Slide the big keyboard sideways to reach the other keys.'));
+    };
+
+    const draw = () => drawKeys(marks, m => noteName(m, flats), m => {
+      playNote(m);
+      if (done) return;
+      if (marks.get(m) === brush) marks.delete(m);
+      else marks.set(m, brush);
+      message.replaceChildren();
+      draw();
+    });
+
+    const showSheet = () => sheet.replaceChildren(sheetElement({ chord: card, lh: lhGoal, rh: rhGoal }));
+
+    const hint = () => {
+      hinted = true;
+      showSheet();
+      sheet.append(h('p', { class: 'muted small' }, 'You can still finish, but a chord solved with the hint won’t level up.'));
+    };
+
+    const finish = ok => {
+      done = true;
+      grade(ok, hinted);
+      reveal();
+      const answer = new Map([...lhGoal.map(m => [m, 'lh']), ...rhGoal.map(m => [m, 'rh'])]);
+      drawKeys(answer, noteLabeler(card), m => playNote(m));
+      showSheet();
+      brushes.hidden = true;
+      message.replaceChildren(h('p', { class: ok ? 'good' : 'bad' },
+        !ok ? `Out of strikes. Here is the correct answer for ${card.symbol}.`
+          : hinted ? '✓ Got it with the hint! Try this chord again later without it to level it up.'
+            : strikes ? `✓ Got it, with ${strikes} strike${strikes === 1 ? '' : 's'}!` : '✓ Perfect, no strikes!'));
+      actions.replaceChildren(nextBtn());
+    };
+
+    const part = (name, r) => `${name}: ${r.right} right${r.wrong ? `, ${r.wrong} wrong` : ''}${r.missing ? `, ${r.missing} missing` : ''}`;
+
+    const check = () => {
+      const result = gradeMarks(card, marks);
+      if (result.empty) return message.replaceChildren(h('p', { class: 'bad' }, 'Mark some keys first.'));
+      if (result.ok) return finish(true);
+
+      strikes++;
+      drawStrikes();
+      if (strikes >= MAX_STRIKES) return finish(false);
+      const left = MAX_STRIKES - strikes;
+      const lhNotesRight = !result.lh.wrong && !result.lh.missing;
+      const order = lhNotesRight && !result.lh.shape && !result.rh.wrong && !result.rh.missing;
+      message.replaceChildren(h('p', { class: 'bad' },
+        order
+          ? 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.'
+          : `Not quite. ${part('Left hand', result.lh)} · ${part('Right hand', result.rh)}.`,
+        ` ${left} strike${left === 1 ? '' : 's'} left.`));
+    };
+
+    sheet.append(h('button', { type: 'button', class: 'btn small', onclick: hint }, '💡 Hint: show the music sheet'));
+    actions.replaceChildren(
+      h('button', { type: 'button', class: 'btn', onclick: () => { marks.clear(); message.replaceChildren(); draw(); } }, 'Clear'),
+      h('button', { type: 'button', class: 'btn primary', onclick: check }, 'Check'));
+
+    drawStrikes();
+    drawBrushes();
+    draw();
+    stage.replaceChildren(
+      prompt('Mark the keys for'),
+      h('p', { class: 'muted small mark-hint' },
+        `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
+      sheet, strikesEl, brushes, scroller, overview, message, actions);
+  }
+
   // Hear the chord and pick it. Every choice has the same root, so you're training your ear on the
   // chord's sound (major = bright, minor = sad…), which doesn't need perfect pitch.
   function earMode() {
@@ -254,7 +374,7 @@ export function quizView() {
     const types = POOLS[settings.quizPool].types.map(t => TYPE_BY_ID[t]);
     mastery.replaceChildren(
       h('div', { class: 'row between' },
-        h('h3', {}, settings.quizMode === 'ear' ? 'Your progress (by ear)' : 'Your progress'),
+        h('h3', {}, { ear: 'Your progress (by ear)', mark: 'Your progress (both hands)' }[settings.quizMode] || 'Your progress'),
         h('button', {
           type: 'button',
           class: 'btn small',
