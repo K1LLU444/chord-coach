@@ -1,0 +1,11 @@
+{
+  "name": "chord-coach",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/stamp-sw.mjs && python3 -m http.server 8000",
+    "stamp": "node scripts/stamp-sw.mjs",
+    "build": "node scripts/stamp-sw.mjs --out _site",
+    "test": "node --test"
+  }
+}

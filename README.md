@@ -1,0 +1,55 @@
+# Chord Coach
+
+A piano chord helper for a Casio CT-S300 (61 keys), made for a complete beginner.
+Runs in the browser on Mac and iPhone (add it to the home screen to use it like an app, offline too).
+
+- **Chords**: search (`Am`, `F#m7`, `Bb major`, `C/E`…) or pick root + type. Shows the left hand
+  (root → 5th → octave) in blue and the right hand chord in orange, with inversions and sound.
+- **Songs**: paste chords (plain, bars, `[Chorus]` sections, chords-over-lyrics, ChordPro). Step through them:
+  hover or ← → on Mac; tap, swipe the keyboard or slide a finger along the chords on iPhone.
+  "Smooth hand movement" picks inversions so your right hand barely moves; dashed keys preview the next chord.
+- **Quiz**: Find the keys / Play it on your piano / Name it, with spaced repetition and a progress grid.
+
+### Songs from Ultimate Guitar
+
+Browsers don't let the app download Ultimate Guitar pages itself, so the Songs tab has a
+**Send to Chord Coach** bookmark button (`js/ultimate-guitar.js`). Open a song's chords page on UG,
+press the bookmark, and the app opens with the chords and sections (lyrics and guitar tabs dropped,
+capo transposed to concert pitch). Sending the same song again updates it. The bookmark points at the
+app's current address, so set it up again after moving the app (e.g. to GitHub Pages).
+
+Songs and quiz progress are saved per device (browser storage). Use **Share** to send songs between devices.
+
+## Run it on the Mac
+
+```sh
+npm start            # serves on http://localhost:8000
+npm test             # checks the chord theory (including the original chord table) and versioning
+```
+
+To try it on the iPhone on the same Wi-Fi, open `http://<your-mac-ip>:8000`
+(find the IP in System Settings → Wi-Fi → Details). Offline mode only works once it's hosted on https.
+
+## Put it online for free (GitHub Pages)
+
+1. Create a GitHub repository and push this folder to it (branch `main`).
+2. Repository → Settings → Pages → Source: **GitHub Actions**.
+3. Every push to `main` now runs the tests and publishes the app
+   ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)). If a test fails, nothing is published.
+4. Open `https://<username>.github.io/<repo>/` on the iPhone in Safari → Share → **Add to Home Screen**.
+
+### Updates and versions (automatic)
+
+`scripts/stamp-sw.mjs` fingerprints the app files and writes the result into `VERSION` in `sw.js`,
+together with the list of files to keep offline. It runs on every deploy and on `npm start`,
+so there's nothing to bump by hand: any change gives a new version, and phones pick it up the next
+time the app is opened (offline apps show the update on the second open). `npm run stamp` runs it
+manually; `npm run build` writes the deployable copy to `_site/`.
+
+## Files
+
+- `js/theory.js`: chord parsing, note spelling, voicings, inversions, song parsing
+- `js/keyboard.js`: SVG keyboard drawing
+- `js/audio.js`: built-in synth (Web Audio)
+- `js/views/`: the Chords, Songs and Quiz tabs
+- `sw.js`, `manifest.webmanifest`: offline support and home-screen install
