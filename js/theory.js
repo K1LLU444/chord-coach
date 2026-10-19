@@ -345,10 +345,12 @@ export const STYLES = [
 /**
  * Left hand chord: the same chord the right hand plays (the root, then +4 or +3, then the rest, counted upward),
  * one octave lower, so the root is the lowest note. The root sits between C3 and B3.
- * Slash chords add their bass note lower down.
+ * A note more than an octave above the root (the 9th of a 9th chord) drops an octave, so the left hand
+ * never reaches up into the right hand's notes. Slash chords add their bass note lower down.
  */
 export function lhChord(chord) {
-  const notes = rhVoicing(chord, 0, 48);
+  const stacked = rhVoicing(chord, 0, 48);
+  const notes = stacked.map(m => (m - stacked[0] >= 12 ? m - 12 : m)).sort((a, b) => a - b);
   if (chord.bass) notes.unshift(nextAtOrAbove(chord.bassPc, LH_RANGE.from));
   return notes;
 }

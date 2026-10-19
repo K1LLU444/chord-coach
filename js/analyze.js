@@ -60,3 +60,39 @@ export function analyzeSong(song) {
     key: song.meta?.key || '',
   };
 }
+
+/**
+ * The shape of a song: the order of its sections, and the distinct chord lines (sections with the same
+ * chords are listed once, with all their names). Used for the printed song sheet.
+ */
+export function songForm(song) {
+  const { chords, sections } = parseSong(song.text);
+  const headings = [...sections].sort((a, b) => a.start - b.start);
+  const parts = [];
+  if (!headings.length) parts.push({ name: 'Song', start: 0 });
+  else if (headings[0].start > 0) parts.push({ name: 'Start', start: 0 }); // chords written before the first heading
+  parts.push(...headings.map(s => ({ name: s.name, start: s.start })));
+  parts.forEach((part, i) => {
+    part.chords = chords.slice(part.start, parts[i + 1]?.start ?? chords.length).map(c => c.symbol);
+  });
+
+  const filled = parts.filter(p => p.chords.length);
+  const byChords = new Map();
+  for (const part of filled) {
+    const key = part.chords.join(' ');
+    if (!byChords.has(key)) byChords.set(key, { names: [], chords: part.chords });
+    const group = byChords.get(key);
+    if (!group.names.includes(part.name)) group.names.push(part.name);
+  }
+  // Two lines that share a name but have different chords (a changed ending, say) are told apart with a number.
+  const seen = new Map();
+  const groups = [...byChords.values()].map(g => ({
+    ...g,
+    names: g.names.map(n => {
+      const count = (seen.get(n) ?? 0) + 1;
+      seen.set(n, count);
+      return count > 1 ? `${n} (${count})` : n;
+    }),
+  }));
+  return { order: filled.map(p => p.name), groups };
+}

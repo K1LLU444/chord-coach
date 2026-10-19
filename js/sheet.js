@@ -16,7 +16,7 @@ const TOP = 44;
 const MARGIN = 36;
 const X0 = 38; // the strip to the left of this holds the line and space letters
 const X1 = W - 12;
-const FIRST_X = 128;
+const FIRST_X = 134; // far enough right that a chord's flats and sharps clear the time signature
 const y = step => MARGIN + (TOP - step) * STEP;
 
 const TREBLE = { lines: [30, 32, 34, 36, 38], low: 28, high: 40, mid: 34 };
@@ -89,7 +89,7 @@ const named = (notes, label) => notes.map(midi => ({ midi, name: label(midi), st
 
 /** Notes played one after another: quarter notes with stems. */
 function drawSequence(svg, notes, staff, color, label, beats) {
-  const gap = beats <= 3 ? 44 : beats === 4 ? 30 : 24;
+  const gap = beats <= 3 ? 42 : beats === 4 ? 28 : 22;
   named(notes, label).forEach(({ name, step }, i) => {
     const cx = FIRST_X + i * gap;
     const up = step < staff.mid;
@@ -165,7 +165,7 @@ function drawStrum(svg, plan, label) {
     const cx = x(i === 0 ? 0 : half);
     const up = step < BASS.mid;
     addLedgers(svg, step, BASS, cx);
-    if (i === 0) accidental(svg, cx - 10, step, name, blue);
+    accidental(svg, cx - 10, step, name, blue); // each bass note is on its own line or space, so each gets its own sign
     head(svg, cx, step, blue, false);
     const sx = up ? cx + 5.4 : cx - 5.4;
     svg.append(el('line', { x1: sx, x2: sx, y1: y(step), y2: y(step) + (up ? -7 : 7) * STEP, class: 'stem', style: `stroke:${blue}` }));
@@ -225,7 +225,7 @@ function drawStrum(svg, plan, label) {
  * The staff, clefs, time signature and letter guide. Notes are added when a `plan` (from handPlan) is given:
  * plan = { lh: { notes, together }, rh: { notes, together } }.
  */
-export function sheetSVG({ chord, plan, guide = true }) {
+export function sheetSVG({ chord, plan, guide = true, compact = false }) {
   const reveal = Boolean(plan);
   const label = noteLabeler(chord);
   const hands = reveal
@@ -239,7 +239,12 @@ export function sheetSVG({ chord, plan, guide = true }) {
   const strum = reveal && plan.style === 'strum';
   const [sigTop, sigBottom] = strum ? signatureOf(plan.feel) : [beats, 4];
 
-  const svg = el('svg', { viewBox: `0 0 ${W} ${y(12) + 14}`, class: 'sheet', role: 'img' });
+  // compact: no letter guide and no empty strip on the left, for many small sheets on one page.
+  const svg = el('svg', {
+    viewBox: compact ? `${X0 - 10} 0 ${W - X0 + 10} ${y(12) + 14}` : `0 0 ${W} ${y(12) + 14}`,
+    class: compact ? 'sheet compact' : 'sheet',
+    role: 'img',
+  });
   svg.setAttribute('aria-label', reveal
     ? `Sheet music for ${chord.symbol}: left hand ${plan.lh.notes.map(label).join(' ')}, right hand ${plan.rh.notes.map(label).join(' ')}`
     : `Empty sheet music for ${chord.symbol}`);
@@ -252,18 +257,19 @@ export function sheetSVG({ chord, plan, guide = true }) {
 
   // Guide: the letter of every line (next to the staff) and space (one column further left).
   // Letters your chord uses are coloured like the hand that plays them.
-  if (guide) {
+  if (guide && !compact) {
     const used = new Map();
-    for (const { hand, color } of hands) for (const m of hand.notes) used.set(stepOf(label(m), m), color);
+    for (const { hand, color } of hands) for (const m of hand.notes) used.set(stepOf(label(m), m), { color, name: label(m) });
     const steps = new Set([...TREBLE.lines, ...BASS.lines, 31, 33, 35, 37, 19, 21, 23, 25, 28, ...used.keys()]);
     for (const step of steps) {
-      const color = used.get(step);
+      const note = used.get(step);
+      // A coloured label names the exact note, so a flat or sharp on the note shows here too (A♭, not A).
       svg.append(el('text', {
         x: X0 - (step % 2 === 0 ? 5 : 17),
         y: y(step) + 3.4,
-        class: `gl${step % 2 === 0 ? '' : ' space'}${color ? ' used' : ''}`,
-        ...(color ? { style: `fill:${color}` } : {}),
-      }, stepLetter(step)));
+        class: `gl${step % 2 === 0 ? '' : ' space'}${note ? ' used' : ''}`,
+        ...(note ? { style: `fill:${note.color}` } : {}),
+      }, note ? note.name[0] + accidentalOf(note.name) : stepLetter(step)));
     }
   }
 
@@ -299,5 +305,5 @@ export function sheetElement(opts) {
     opts.guide !== false && h('p', { class: 'sheet-guide' },
       'The letters on the left name each line and space. ',
       h('b', {}, 'Lines'), ' (next to the staff): treble E G B D F, bass G B D F A. ',
-      h('b', {}, 'Spaces'), ': treble F A C E, bass A C E G. Coloured letters are the ones your chord uses; the C between the two staves is middle C.'));
+      h('b', {}, 'Spaces'), ': treble F A C E, bass A C E G. Coloured labels are the exact notes your chord uses (a ♭ or ♯ changes the letter: A♭ is A flat); the C between the two staves is middle C.'));
 }

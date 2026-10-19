@@ -139,7 +139,9 @@ test('left hand chord: the right-hand chord one octave lower, root lowest', () =
       const notes = lhChord(chord);
       assert.equal(notes[0] % 12, chord.rootPc, chord.symbol + ': the root is the lowest note');
       assert.ok(notes[0] >= 48 && notes[0] <= 59, chord.symbol + ': the root sits between C3 and B3');
-      assert.deepEqual(notes.map(m => m + 12), rhVoicing(chord, 0, 60), chord.symbol + ': exactly one octave below the right hand');
+      const wide = Math.max(...chord.type.intervals) >= 12; // 9th chords: the 9th is folded down an octave
+      if (!wide) assert.deepEqual(notes.map(m => m + 12), rhVoicing(chord, 0, 60), chord.symbol + ': exactly one octave below the right hand');
+      assert.ok(notes.every(m => m - notes[0] < 12), chord.symbol + ': every note within an octave of the root, so it stays clear of the right hand');
       assert.deepEqual([...new Set(notes.map(m => m % 12))].sort((a, b) => a - b), [...chord.pcs].sort((a, b) => a - b), chord.symbol);
     }
   }

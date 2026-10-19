@@ -90,3 +90,14 @@ test('song analysis: strum pattern, tempo and an easier starting set', () => {
   assert.equal(without.feel.bpm, DEFAULT_FEEL.bpm);
   assert.equal(parseSong(text).chords.length, withPattern.chordCount);
 });
+
+test('song form: section order and the distinct chord lines', async () => {
+  const { songForm } = await import('../js/analyze.js');
+  const text = '[Intro]\nBb Dm Eb Ebm\n[Verse 1]\nBb Dm\nF7\n[Chorus]\nEb F Bb\n[Verse 2]\nBb Dm\nF7\n[Chorus]\nEb F Bb\n[Guitar Solo]\nBb Dm Eb Ebm\n[Chorus]\nEb F Bb Ebm6';
+  const form = songForm({ text });
+  assert.deepEqual(form.order, ['Intro', 'Verse 1', 'Chorus', 'Verse 2', 'Chorus', 'Guitar Solo', 'Chorus']);
+  assert.deepEqual(form.groups.map(g => g.names), [['Intro', 'Guitar Solo'], ['Verse 1', 'Verse 2'], ['Chorus'], ['Chorus (2)']]);
+  assert.deepEqual(form.groups[0].chords, ['Bb', 'Dm', 'Eb', 'Ebm']);
+  assert.deepEqual(songForm({ text: 'C G Am F' }).order, ['Song'], 'a song without headings is one part');
+  assert.deepEqual(songForm({ text: 'C G\n[Chorus]\nAm F' }).order, ['Start', 'Chorus'], 'chords before the first heading');
+});
