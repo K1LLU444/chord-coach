@@ -31,7 +31,7 @@ test('changing the service worker code itself changes the version', () => {
 
 test('the real app: every file the page loads is cached for offline use', () => {
   const files = appFiles();
-  for (const f of ['index.html', 'styles.css', 'manifest.webmanifest', 'js/app.js', 'js/ultimate-guitar.js', 'js/views/songs.js', 'icons/icon-180.png']) {
+  for (const f of ['index.html', 'reset.html', 'styles.css', 'manifest.webmanifest', 'js/app.js', 'js/ultimate-guitar.js', 'js/views/songs.js', 'icons/icon-180.png']) {
     assert.ok(files.includes(f), f);
   }
   assert.ok(!files.some(f => f.startsWith('tests/') || f === 'package.json' || f === 'sw.js'));

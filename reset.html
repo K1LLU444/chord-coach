@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Refreshing Chord Coach</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 17px/1.5 -apple-system, system-ui, sans-serif; background: #f6f5f2; color: #1d1d1f; text-align: center; padding: 24px; }
+    @media (prefers-color-scheme: dark) { body { background: #111113; color: #ececf0; } }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { margin: 0 0 8px; max-width: 30em; }
+    a { color: #4f4fd1; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Refreshing Chord Coach…</h1>
+    <p id="msg">Clearing the old saved copy of the app. Your songs and quiz progress are kept.</p>
+    <p><a href="./">Open the app now</a></p>
+  </main>
+  <script>
+    // Rescue page: removes the saved offline copy (service worker + cache), then opens the app, which downloads
+    // the newest version. Songs and quiz progress live in localStorage and are not touched.
+    (async () => {
+      const msg = document.getElementById('msg');
+      try {
+        if ('serviceWorker' in navigator) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+        if ('caches' in window) for (const k of await caches.keys()) await caches.delete(k);
+        msg.textContent = 'Done. Opening the app…';
+      } catch (e) {
+        msg.textContent = 'Could not clear everything (' + e.message + '). Opening the app anyway…';
+      }
+      setTimeout(() => location.replace('./'), 700);
+    })();
+  </script>
+</body>
+</html>

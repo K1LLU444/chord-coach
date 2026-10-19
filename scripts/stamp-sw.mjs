@@ -8,7 +8,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const TOP_FILES = ['index.html', 'styles.css', 'manifest.webmanifest'];
+const TOP_FILES = ['index.html', 'reset.html', 'styles.css', 'manifest.webmanifest'];
 const DIRS = ['icons', 'js'];
 const VERSION_RE = /const VERSION = '[^']*';/;
 const ASSETS_RE = /const ASSETS = \[[\s\S]*?\];/;

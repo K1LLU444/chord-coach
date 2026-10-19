@@ -63,6 +63,28 @@ function handleImport() {
   return true;
 }
 
+// The version this device is running (the name of its saved offline copy), and a button that clears it.
+const versionLabel = h('span', { class: 'app-version' });
+async function showVersion() {
+  try {
+    const name = (await caches.keys()).find(k => k.startsWith('chord-coach-'));
+    versionLabel.textContent = name ? `Version ${name.slice('chord-coach-'.length, 'chord-coach-'.length + 7)}` : 'Not saved offline yet';
+  } catch {
+    versionLabel.textContent = '';
+  }
+}
+async function refreshApp() {
+  toast('Refreshing…');
+  try {
+    if ('serviceWorker' in navigator) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    if ('caches' in window) for (const k of await caches.keys()) await caches.delete(k); // songs and progress are not touched
+  } catch {}
+  location.reload();
+}
+main.after(h('footer', { class: 'app-foot' }, versionLabel, h('button', { type: 'button', class: 'link-btn', onclick: refreshApp }, 'Refresh app')));
+showVersion();
+window.addEventListener('load', () => setTimeout(showVersion, 1500));
+
 if (!handleImport()) show(settings.tab);
 window.addEventListener('hashchange', handleImport);
 

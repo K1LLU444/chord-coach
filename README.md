@@ -41,6 +41,13 @@ To try it on the iPhone on the same Wi-Fi, open `http://<your-mac-ip>:8000`
    ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)). If a test fails, nothing is published.
 4. Open `https://<username>.github.io/<repo>/` on the iPhone in Safari → Share → **Add to Home Screen**.
 
+### If a device shows an old version
+
+The app fetches the newest files first whenever it is online (`sw.js`), and only uses its saved copy when offline.
+The footer shows `Version xxxxxxx` and a **Refresh app** button (clears the saved copy; songs and progress are kept).
+A device stuck on an old copy can open `reset.html` (for example `https://k1llu444.github.io/chord-coach/reset.html`),
+which clears the saved copy and opens the app again.
+
 ### Updates and versions (automatic)
 
 `scripts/stamp-sw.mjs` fingerprints the app files and writes the result into `VERSION` in `sw.js`,
