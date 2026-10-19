@@ -4,6 +4,7 @@
 
 import { h } from './dom.js';
 import { noteLabeler } from './theory.js';
+import { signatureOf } from './rhythm.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const LETTER_IDX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
@@ -144,6 +145,83 @@ function drawChord(svg, notes, staff, color, label, beats) {
 }
 
 /**
+ * Strum style: the right-hand chord is struck on every count (beamed in groups, accents marked),
+ * and the left hand plays its bass note on count 1 and the 5th in the middle of the bar.
+ */
+function drawStrum(svg, plan, label) {
+  const { feel } = plan;
+  const left = 120;
+  const right = X1 - 14;
+  const gap = feel.pulses > 1 ? (right - left) / (feel.pulses - 1) : 0;
+  const x = pulse => left + pulse * gap;
+  const half = Math.floor(feel.pulses / 2);
+  const blue = 'var(--lh)';
+  const orange = 'var(--rh)';
+
+  // Left hand: single notes with stems.
+  plan.lh.notes.forEach((midi, i) => {
+    const name = label(midi);
+    const step = stepOf(name, midi);
+    const cx = x(i === 0 ? 0 : half);
+    const up = step < BASS.mid;
+    addLedgers(svg, step, BASS, cx);
+    if (i === 0) accidental(svg, cx - 10, step, name, blue);
+    head(svg, cx, step, blue, false);
+    const sx = up ? cx + 5.4 : cx - 5.4;
+    svg.append(el('line', { x1: sx, x2: sx, y1: y(step), y2: y(step) + (up ? -7 : 7) * STEP, class: 'stem', style: `stroke:${blue}` }));
+  });
+
+  // Right hand: the same chord on every count that isn't a rest.
+  const items = named(plan.rh.notes, label);
+  const layout = chordLayout(items.map(n => n.step), TREBLE.mid);
+  const steps = layout.notes.map(n => n.step);
+  const lo = Math.min(...steps);
+  const hi = Math.max(...steps);
+  const tipY = layout.up ? y(hi) - 7 * STEP : y(lo) + 7 * STEP;
+  const stemDx = layout.up ? 5.4 : -5.4;
+  const played = feel.hits.map((hit, i) => (hit.rest ? null : i)).filter(i => i !== null);
+
+  played.forEach((pulse, order) => {
+    const cx = x(pulse);
+    for (const n of layout.notes) {
+      addLedgers(svg, n.step, TREBLE, cx + n.dx * 11);
+      head(svg, cx + n.dx * 11, n.step, orange, false);
+    }
+    svg.append(el('line', { x1: cx + stemDx, x2: cx + stemDx, y1: y(layout.up ? lo : hi), y2: tipY, class: 'stem', style: `stroke:${orange}` }));
+    if (feel.hits[pulse].accent) {
+      // The accent sits on the note-head side of the chord, away from the stem and the beam.
+      svg.append(el('text', { x: cx, y: layout.up ? y(lo) + 13 : y(hi) - 7, class: 'accent', style: `fill:${orange}` }, '>'));
+    }
+    if (order === 0) {
+      // Accidentals are written once at the start of the bar.
+      const placed = [];
+      const hasLeft = layout.notes.some(n => n.dx < 0);
+      for (const n of [...layout.notes].sort((a, b) => b.step - a.step)) {
+        const name = items.find(item => item.step === n.step).name;
+        if (!accidentalOf(name)) continue;
+        let col = 0;
+        while (placed.some(p => p.col === col && Math.abs(p.step - n.step) < 6)) col++;
+        placed.push({ step: n.step, col });
+        accidental(svg, cx - (hasLeft ? 21 : 10) - col * 10, n.step, name, orange);
+      }
+    }
+  });
+
+  // Beams join the stems of each group of counts (not needed for plain quarter-note counts).
+  if (feel.group > 1) {
+    for (let start = 0; start < feel.pulses; start += feel.group) {
+      const group = played.filter(p => p >= start && p < start + feel.group);
+      if (group.length > 1) {
+        svg.append(el('line', {
+          x1: x(group[0]) + stemDx, x2: x(group.at(-1)) + stemDx, y1: tipY, y2: tipY,
+          class: 'beam', style: `stroke:${orange}`,
+        }));
+      }
+    }
+  }
+}
+
+/**
  * The staff, clefs, time signature and letter guide. Notes are added when a `plan` (from handPlan) is given:
  * plan = { lh: { notes, together }, rh: { notes, together } }.
  */
@@ -158,6 +236,8 @@ export function sheetSVG({ chord, plan, guide = true }) {
     : [];
   const sequence = hands.find(({ hand }) => !hand.together);
   const beats = sequence ? sequence.hand.notes.length : 3;
+  const strum = reveal && plan.style === 'strum';
+  const [sigTop, sigBottom] = strum ? signatureOf(plan.feel) : [beats, 4];
 
   const svg = el('svg', { viewBox: `0 0 ${W} ${y(12) + 14}`, class: 'sheet', role: 'img' });
   svg.setAttribute('aria-label', reveal
@@ -194,10 +274,14 @@ export function sheetSVG({ chord, plan, guide = true }) {
   svg.append(el('text', { x: X0 + 2, y: y(28) + 1, class: 'clef treble' }, '𝄞'));
   svg.append(el('text', { x: X0 + 2, y: y(20) + 2, class: 'clef bass' }, '𝄢'));
   for (const [hi, lo] of [[36, 32], [24, 20]]) {
-    svg.append(el('text', { x: X0 + 46, y: y(hi) + 7, class: 'time' }, String(beats)));
-    svg.append(el('text', { x: X0 + 46, y: y(lo) + 7, class: 'time' }, '4'));
+    svg.append(el('text', { x: X0 + 46, y: y(hi) + 7, class: 'time' }, String(sigTop)));
+    svg.append(el('text', { x: X0 + 46, y: y(lo) + 7, class: 'time' }, String(sigBottom)));
   }
 
+  if (strum) {
+    drawStrum(svg, plan, label);
+    return svg;
+  }
   for (const { hand, staff, color } of hands) {
     if (!hand.notes.length) continue;
     (hand.together ? drawChord : drawSequence)(svg, hand.notes, staff, color, label, beats);

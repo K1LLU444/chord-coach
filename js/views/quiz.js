@@ -255,7 +255,9 @@ export function quizView() {
       const notesRight = !result.lh.wrong && !result.lh.missing && !result.rh.wrong && !result.rh.missing;
       const almost = style === 'broken'
         ? 'Almost! The notes are right, but blue (left hand) goes below middle C and orange (right hand) from middle C up.'
-        : 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.';
+        : style === 'strum'
+          ? 'Almost! The notes are right, but the left hand is the root with its 5th above it.'
+          : 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.';
       message.replaceChildren(h('p', { class: 'bad' },
         notesRight
           ? almost
@@ -276,7 +278,9 @@ export function quizView() {
       h('p', { class: 'muted small mark-hint' },
         style === 'broken'
           ? `Pick a colour, then tap keys. Blue = left hand: the whole chord (${lhGoal.length} keys), below middle C. Orange = right hand: the same ${card.pcs.length} notes, played one at a time, from middle C up.`
-          : `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
+          : style === 'strum'
+            ? `Pick a colour, then tap keys. Blue = left hand: 2 keys, the root and its 5th above it. Orange = right hand: the whole chord (${card.pcs.length} different notes), struck on every count.`
+            : `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
       sheet, strikesEl, brushes, scroller, overview, message, actions);
   }
 

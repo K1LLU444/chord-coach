@@ -165,3 +165,16 @@ test('grading the "chord + broken notes" style', () => {
   assert.deepEqual(partial.rh, { right: 2, wrong: 1, missing: 1, shape: true });
   assert.equal(gradeMarks(C, marks([36, 43, 48], [60, 64, 67]), 'bass').ok, true, 'bass style is unchanged');
 });
+
+test('strum style: bass on the count, the whole chord struck every count', () => {
+  const C = parseChord('C');
+  const plan = handPlan(C, 'strum');
+  assert.equal(plan.style, 'strum');
+  assert.deepEqual(plan.lh.notes, [36, 43], 'root and 5th only');
+  assert.deepEqual([plan.lh.together, plan.rh.together], [false, true]);
+  const marks = (lh, rh) => new Map([...lh.map(m => [m, 'lh']), ...rh.map(m => [m, 'rh'])]);
+  assert.equal(gradeMarks(C, marks([36, 43], [60, 64, 67]), 'strum').ok, true);
+  assert.equal(gradeMarks(C, marks([48, 55], [64, 67, 72]), 'strum').ok, true, 'any octave, any inversion');
+  assert.equal(gradeMarks(C, marks([36, 43, 48], [60, 64, 67]), 'strum').ok, false, 'the octave belongs to the bass style');
+  assert.equal(gradeMarks(C, marks([43, 48], [60, 64, 67]), 'strum').ok, false, 'the 5th must sit above the root, not below it');
+});

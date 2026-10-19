@@ -31,8 +31,12 @@ for (const [name, view] of Object.entries(views)) {
 
 document.querySelector('.app-header').after(styleBar());
 
+let current = null;
+
 function show(name) {
   if (!views[name]) name = 'chords';
+  if (current && current !== name) views[current].onHide?.(); // e.g. stop the metronome
+  current = name;
   for (const [n, v] of Object.entries(views)) v.el.hidden = n !== name;
   tabs.querySelectorAll('button').forEach(b => b.toggleAttribute('aria-current', b.dataset.tab === name));
   tabs.querySelector('[aria-current]')?.setAttribute('aria-current', 'page');

@@ -16,14 +16,17 @@ export function styleBar() {
   const blurb = h('p', { class: 'style-blurb' });
   const describe = () => { blurb.textContent = styleInfo().blurb; };
   describe();
+  const switcher = segmented(STYLES.map(s => [s.id, s.name]), currentStyle(), v => {
+    settings.style = v;
+    saveSettings();
+    window.dispatchEvent(new Event('stylechange'));
+  }, 'Playing style');
+  // Keep the buttons and the sentence in step when the style is changed from somewhere else.
+  window.addEventListener('stylechange', () => {
+    switcher.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === currentStyle())));
+    describe();
+  });
   return h('div', { class: 'style-bar' },
-    h('div', { class: 'style-row' },
-      h('span', { class: 'style-label' }, 'Playing style'),
-      segmented(STYLES.map(s => [s.id, s.name]), currentStyle(), v => {
-        settings.style = v;
-        saveSettings();
-        describe();
-        window.dispatchEvent(new Event('stylechange'));
-      }, 'Playing style')),
+    h('div', { class: 'style-row' }, h('span', { class: 'style-label' }, 'Playing style'), switcher),
     blurb);
 }

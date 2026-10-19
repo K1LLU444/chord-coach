@@ -89,8 +89,8 @@ export function chordsView() {
           h('div', { class: 'long' }, chord.name),
           h('div', { class: 'muted' }, 'Notes: ', chord.notes.join(' · ')))),
       h('div', { class: 'hands' },
-        hand('lh', 'Left hand', handText(plan.lh, label), () => playHand(plan.lh)),
-        hand('rh', 'Right hand', handText(plan.rh, label), () => playHand(plan.rh))),
+        hand('lh', 'Left hand', handText(plan.lh, label), () => playHand(plan.lh), plan.lh.note),
+        hand('rh', 'Right hand', handText(plan.rh, label), () => playHand(plan.rh), plan.rh.note)),
       h('div', { class: 'row wrap' },
         h('button', { type: 'button', class: 'btn primary', onclick: () => playPlan(plan) }, '▶ Play both hands'),
         chord.pcs.length > 1 && h('div', { class: 'inv' },
@@ -139,9 +139,9 @@ export function chordsView() {
   };
 }
 
-export function hand(cls, title, notes, onPlay) {
+export function hand(cls, title, notes, onPlay, note) {
   return h('div', { class: `hand ${cls}` },
     h('span', { class: 'hand-title' }, title),
-    h('span', { class: 'hand-notes' }, notes),
+    h('span', { class: 'hand-notes' }, notes, note && h('small', { class: 'hand-note' }, note)),
     h('button', { type: 'button', class: 'btn icon', 'aria-label': `Play ${title.toLowerCase()}`, onclick: onPlay }, '▶'));
 }

@@ -1,3 +1,5 @@
+import { DEFAULT_FEEL } from './rhythm.js';
+
 // Music theory: chord parsing, note spelling, keyboard voicings and song parsing.
 // Pitch classes (pc) are 0–11 with C = 0. Keys are MIDI numbers (middle C = 60).
 
@@ -332,6 +334,12 @@ export const STYLES = [
     blurb: 'Left hand: the whole chord together. Right hand: the same chord notes one at a time, low to high.',
     play: 'Left hand: the whole chord together. Right hand: the same notes one at a time, low to high.',
   },
+  {
+    id: 'strum',
+    name: 'Strum',
+    blurb: 'Like a guitar strum: the right hand strikes the whole chord again and again, count after count. Left hand: the bass note on count 1 and its 5th in the middle of the bar.',
+    play: 'Left hand: the bass note on count 1, then its 5th in the middle of the bar. Right hand: the whole chord, struck on every count.',
+  },
 ];
 
 /**
@@ -347,18 +355,29 @@ export function lhChord(chord) {
 /**
  * Which keys each hand plays, and whether they are pressed together (a chord) or one after another.
  * `rh` can supply a ready-made right-hand voicing (used by songs, which pick smooth inversions).
+ * `feel` (see rhythm.js) says how a bar is counted; only the strum style and the sheet music depend on it.
  */
-export function handPlan(chord, style = 'bass', { inversion = 0, rh } = {}) {
+export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFAULT_FEEL } = {}) {
   const right = rh ?? rhVoicing(chord, inversion);
-  return style === 'broken'
-    ? { lh: { notes: lhChord(chord), together: true }, rh: { notes: right, together: false } }
-    : { lh: { notes: lhPattern(chord), together: false }, rh: { notes: right, together: true } };
+  if (style === 'broken') {
+    return { style, feel, lh: { notes: lhChord(chord), together: true }, rh: { notes: right, together: false } };
+  }
+  if (style === 'strum') {
+    return {
+      style,
+      feel,
+      lh: { notes: lhPattern(chord).slice(0, 2), together: false, note: 'count 1, then the middle of the bar' },
+      rh: { notes: right, together: true, note: 'on every count' },
+    };
+  }
+  return { style: 'bass', feel, lh: { notes: lhPattern(chord), together: false }, rh: { notes: right, together: true } };
 }
 
 /**
  * Compare keys marked on a keyboard with a chord's answer. marks: Map(midi → 'lh' | 'rh').
  * Right-hand notes may be in any octave or order (so any inversion works).
  * - 'bass' style: left hand must be root → 5th → octave (low to high), but may sit in any octave.
+ * - 'strum' style: the same, but the left hand is only the root and its 5th.
  * - 'broken' style: left hand is the chord notes below middle C; right hand the same notes from middle C up
  *   (the order they are played in can't be marked, so only the notes and their position are checked).
  */
@@ -378,7 +397,7 @@ export function gradeMarks(chord, marks, style = 'bass') {
     lh = { ...compare(blue, want), shape: blue.length > 0 && blue.every(m => m < RH_RANGE.from) };
     rh.shape = orange.length > 0 && orange.every(m => m >= RH_RANGE.from);
   } else {
-    const goal = lhPattern(chord);
+    const goal = style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
     const pool = goal.map(m => m % 12);
     let right = 0;
     for (const m of blue) {

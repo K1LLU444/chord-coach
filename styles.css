@@ -440,6 +440,19 @@ main {
 .song-chips { display: flex; flex-wrap: wrap; gap: 8px; touch-action: pan-y; }
 .song-chips .chip { font-size: 17px; min-width: 58px; min-height: 46px; padding: 10px 14px; }
 .section-label { flex-basis: 100%; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 6px; }
+.practice { display: grid; gap: 12px; }
+.suggestion { display: grid; gap: 8px; justify-items: start; }
+.suggestion p { margin: 0; }
+.suggest-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; }
+.tempo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tempo-row input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+.tempo-label { min-width: 64px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pulses { display: flex; gap: 6px; flex-wrap: wrap; }
+.pulse { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: var(--surface-2); color: var(--muted); border: 2px solid transparent; transition: background 0.05s; }
+.pulse.main { color: var(--text); border-color: var(--border); }
+.pulse.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.practice-status { margin: 0; min-height: 1.3em; }
+.hand-note { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
 .settings-row { display: flex; flex-wrap: wrap; gap: 4px 20px; padding-top: 6px; border-top: 1px solid var(--border); }
 
 /* ---------- Quiz ---------- */
@@ -485,6 +498,8 @@ main {
 .sheet .chord-symbol { font: 800 24px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; fill: var(--text); }
 .sheet .head { stroke: none; }
 .sheet .head.open { fill: var(--surface); stroke-width: 2.2; }
+.sheet .beam { stroke-width: 3; stroke-linecap: butt; }
+.sheet .accent { font: 800 9px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: middle; }
 .sheet .stem { stroke-width: 1.8; stroke-linecap: round; }
 .sheet .gl { font: 700 8.5px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: end; fill: var(--muted); }
 .sheet .gl.space { font-weight: 500; font-size: 8px; opacity: 0.85; }

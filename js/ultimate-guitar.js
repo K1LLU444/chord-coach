@@ -20,7 +20,7 @@ function bookmarklet() {
     let song;
     if (wiki) {
       const tab = data.tab || {};
-      song = { t: `${tab.song_name} (${tab.artist_name})`, ug: wiki.content, src: location.href.split(/[?#]/)[0], key: tab.tonality_name || '', capo: tab.capo || 0 };
+      song = { t: `${tab.song_name} (${tab.artist_name})`, ug: wiki.content, src: location.href.split(/[?#]/)[0], key: tab.tonality_name || '', capo: tab.capo || 0, strum: (data.tab_view.strummings || [])[0] || null };
     } else {
       const text = [...document.querySelectorAll('pre')].map(e => e.innerText).join('\n');
       if (!text) return alert('Chord Coach: no chords found on this page. Open a song "Chords" page first.');
@@ -110,5 +110,5 @@ export function ugPanel(songs, openSong) {
           'You come back here with the chords and sections added. Lyrics and guitar tabs are left out, ',
           'and if the guitar uses a capo, the chords are raised so they match the recording. ',
           'Sending a song again updates your copy.'))),
-    h('p', { class: 'muted small' }, 'If you move the app to a new address (for example when it goes online), set up the button again.'));
+    h('p', { class: 'muted small' }, 'If you move the app to a new address (for example when it goes online), set up the button again. The button also carries the song’s strumming pattern and tempo; if yours is older than that, delete it and set it up again.'));
 }
