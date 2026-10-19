@@ -1,6 +1,6 @@
 // Songs tab: save chord progressions, then step (or hover) through them on the keyboard.
 
-import { h, fill, toast, toggle } from '../dom.js';
+import { h, fill, toast, toggle, segmented } from '../dom.js';
 import { parseSong, smoothVoicings, rhVoicing, handPlan, noteLabeler, inversionName, ugToText, STYLES } from '../theory.js';
 import { renderBoard } from '../keyboard.js';
 import { playNote, playHand, playPlan } from '../audio.js';
@@ -318,6 +318,7 @@ export function songsView() {
       renderBoard(board, { lh: plan.lh.notes, rh: plan.rh.notes, ghosts, label, showAll: settings.showAll, onKey: m => playNote(m), overview: false });
       counter.textContent = `${idx + 1} / ${p.chords.length}`;
       chipEls.forEach((b, i) => b.classList.toggle('active', i === idx));
+      labelButtons?.(); // the sample length depends on the selected chord
     }
 
     // Swipe left/right on the keyboard to change chord.
@@ -364,12 +365,34 @@ export function songsView() {
     const tempoRange = h('input', { type: 'range', min: 30, max: 180, step: 1, value: tempo, 'aria-label': 'Tempo in beats per minute', oninput: e => setTempo(+e.target.value) });
     const metroBtn = h('button', { type: 'button', class: 'btn' });
     const sampleBtn = h('button', { type: 'button', class: 'btn primary' });
-    const sampleBars = () => Math.min(8, p.chords.length);
+    // Which chords the sample plays: the section you are in, from the selected chord to the end, or everything.
+    const rangeMode = () => (['section', 'from', 'all'].includes(settings.sampleRange) ? settings.sampleRange : 'section');
+    const sampleRange = () => {
+      const total = p.chords.length;
+      if (rangeMode() === 'all') return [0, total];
+      if (rangeMode() === 'from') return [idx, total];
+      let from = 0;
+      let to = total;
+      for (const sec of sections) {
+        if (sec.start <= idx) from = sec.start;
+        else {
+          to = sec.start;
+          break;
+        }
+      }
+      return [from, Math.max(to, from + 1)];
+    };
+    const seconds = n => Math.round(n * feel.pulses * (60 / tempo / feel.group));
+    const sampleLabel = () => {
+      const [from, to] = sampleRange();
+      const n = to - from;
+      return `▶ Play sample (${n} chord${n === 1 ? '' : 's'}, about ${seconds(n)} s)`;
+    };
 
     const flash = pulse => dots.querySelectorAll('.pulse').forEach((d, i) => d.classList.toggle('on', i === pulse));
     const labelButtons = () => {
       metroBtn.textContent = running === 'metronome' ? '■ Stop metronome' : '▶ Metronome';
-      sampleBtn.textContent = running === 'sample' ? '■ Stop sample' : `▶ Play sample (first ${sampleBars()} chords)`;
+      sampleBtn.textContent = running === 'sample' ? '■ Stop sample' : sampleLabel();
     };
     const halt = () => {
       engine?.stop();
@@ -386,6 +409,7 @@ export function songsView() {
       tempoRange.value = tempo;
       tempoLabel.textContent = `${tempo} bpm`;
       engine?.setBpm?.(tempo);
+      labelButtons();
     }
 
     function toggleMetronome() {
@@ -403,7 +427,8 @@ export function songsView() {
       halt();
       if (wasOn) return;
       running = 'sample';
-      const bars = Array.from({ length: sampleBars() }, (_, i) => ({ plan: planAt(i) }));
+      const [from, to] = sampleRange();
+      const bars = Array.from({ length: to - from }, (_, k) => ({ plan: planAt(from + k) }));
       engine = playSample({
         bars,
         feel,
@@ -411,15 +436,19 @@ export function songsView() {
         everyPulse: practice.everyPulse,
         countIn: practice.countIn,
         metronome: practice.clicks,
-        onBar: i => {
-          go(i, true, true);
-          status.textContent = `Bar ${i + 1} of ${bars.length}: ${p.chords[i].symbol}`;
+        onBar: k => {
+          go(from + k, true, true);
+          const section = sectionAt(from + k);
+          status.textContent = `Bar ${k + 1} of ${bars.length}${section ? ` · ${section}` : ''}: ${p.chords[from + k].symbol}`;
         },
         onPulse: (pulse, isCount) => {
           flash(pulse);
           if (isCount) status.textContent = 'Count-in…';
         },
-        onEnd: halt,
+        onEnd: () => {
+          go(from, true, true); // back to where it started, so playing it again is the same
+          halt();
+        },
       });
       labelButtons();
     }
@@ -462,12 +491,19 @@ export function songsView() {
         h('button', { type: 'button', class: 'btn small', onclick: () => setTempo(feel.bpm) }, 'Song tempo')),
       dots,
       status,
+      h('div', { class: 'tempo-row' },
+        h('span', { class: 'style-label' }, 'Sample plays'),
+        segmented([['section', 'This section'], ['from', 'From here'], ['all', 'Whole song']], rangeMode(), v => {
+          settings.sampleRange = v;
+          saveSettings();
+          labelButtons();
+        }, 'What the sample plays')),
       h('div', { class: 'row wrap' }, metroBtn, sampleBtn),
       h('div', { class: 'settings-row' },
         toggle('Count every strum', practice.everyPulse, v => { practice.everyPulse = v; }),
         toggle('Count-in bar before the sample', practice.countIn, v => { practice.countIn = v; }),
         toggle('Click during the sample', practice.clicks, v => { practice.clicks = v; })),
-      h('p', { class: 'muted small' }, 'A chord sheet doesn’t say how long each chord lasts, so the sample gives every chord one bar. The metronome and sample start from your tempo; press Stop to end them.'));
+      h('p', { class: 'muted small' }, 'A chord sheet doesn’t say how long each chord lasts, so the sample gives every chord one bar. “This section” and “From here” start from the chord you have selected. The metronome and sample use your tempo; press Stop to end them.'));
     metroBtn.onclick = toggleMetronome;
     sampleBtn.onclick = toggleSample;
 

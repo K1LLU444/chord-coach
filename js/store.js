@@ -23,6 +23,7 @@ export const settings = Object.assign({
   tab: 'chords',
   showAll: false,
   style: 'bass',
+  sampleRange: 'section',
   smooth: true,
   ghost: true,
   soundOnChange: false,

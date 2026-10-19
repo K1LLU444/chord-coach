@@ -331,8 +331,8 @@ export const STYLES = [
   {
     id: 'broken',
     name: 'Chord + broken notes',
-    blurb: 'Left hand: the whole chord together. Right hand: the same chord notes one at a time, low to high.',
-    play: 'Left hand: the whole chord together. Right hand: the same notes one at a time, low to high.',
+    blurb: 'Left hand: the whole chord together, one octave lower than the right hand. Right hand: the same chord notes one at a time, low to high.',
+    play: 'Left hand: the whole chord together, one octave below the right hand. Right hand: the same notes one at a time, low to high.',
   },
   {
     id: 'strum',
@@ -343,11 +343,12 @@ export const STYLES = [
 ];
 
 /**
- * Left hand chord: every chord note placed once between C3 and B3 (just below middle C), so chords stay
- * close together and never get muddy. Slash chords add their bass note lower down.
+ * Left hand chord: the same chord the right hand plays (the root, then +4 or +3, then the rest, counted upward),
+ * one octave lower, so the root is the lowest note. The root sits between C3 and B3.
+ * Slash chords add their bass note lower down.
  */
 export function lhChord(chord) {
-  const notes = [...new Set(chord.pcs)].map(pc => nextAtOrAbove(pc, 48)).sort((a, b) => a - b);
+  const notes = rhVoicing(chord, 0, 48);
   if (chord.bass) notes.unshift(nextAtOrAbove(chord.bassPc, LH_RANGE.from));
   return notes;
 }
@@ -378,8 +379,8 @@ export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFA
  * Right-hand notes may be in any octave or order (so any inversion works).
  * - 'bass' style: left hand must be root → 5th → octave (low to high), but may sit in any octave.
  * - 'strum' style: the same, but the left hand is only the root and its 5th.
- * - 'broken' style: left hand is the chord notes below middle C; right hand the same notes from middle C up
- *   (the order they are played in can't be marked, so only the notes and their position are checked).
+ * - 'broken' style: left hand is the chord notes, right hand the same notes, with the left hand lower than the right
+ *   (the order the right hand plays them in can't be marked, so only the notes and their position are checked).
  */
 export function gradeMarks(chord, marks, style = 'bass') {
   const blue = [...marks].filter(([, hand]) => hand === 'lh').map(([m]) => m).sort((a, b) => a - b);
@@ -394,8 +395,9 @@ export function gradeMarks(chord, marks, style = 'bass') {
   let lh;
   if (style === 'broken') {
     const want = [...new Set(chord.bass ? [...chord.pcs, chord.bassPc] : chord.pcs)];
-    lh = { ...compare(blue, want), shape: blue.length > 0 && blue.every(m => m < RH_RANGE.from) };
-    rh.shape = orange.length > 0 && orange.every(m => m >= RH_RANGE.from);
+    const leftLower = blue.length > 0 && orange.length > 0 && blue[0] < Math.min(...orange); // blue is sorted, so blue[0] is its lowest
+    lh = { ...compare(blue, want), shape: blue.length > 0 && (orange.length === 0 || leftLower) };
+    rh.shape = orange.length > 0 && (blue.length === 0 || leftLower);
   } else {
     const goal = style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
     const pool = goal.map(m => m % 12);
