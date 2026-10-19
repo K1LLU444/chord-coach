@@ -5,6 +5,22 @@ import { barEvents, pulseSeconds } from './rhythm.js';
 let ctx = null;
 let out = null;
 
+// Master volume. The slider position (0 to 1) is squared, because loudness is felt on a curve rather than a straight
+// line: 0.8 gives the same level the app always had, and 1 is a little louder (the compressor keeps it from clipping).
+let volume = 0.8;
+let muted = false;
+export const volumeToGain = v => 1.25 * Math.min(1, Math.max(0, v)) ** 2;
+const targetGain = () => (muted ? 0 : volumeToGain(volume));
+export const volumeState = () => ({ volume, muted, gain: targetGain() });
+/** The gain the sound system is using right now (null until the first sound); for checking. */
+export const liveGain = () => (out ? out.gain.value : null);
+/** Set the master volume (0 to 1) and whether it is muted. Works before the sound system starts. */
+export function setVolume(v, isMuted = muted) {
+  volume = Math.min(1, Math.max(0, Number(v) || 0));
+  muted = Boolean(isMuted);
+  if (out && ctx) out.gain.setTargetAtTime(targetGain(), ctx.currentTime, 0.02); // a short glide, so there are no clicks
+}
+
 function ensure() {
   if (!ctx) {
     // Lets iPhone play sound even when the ring/silent switch is on silent (Safari 17+).
@@ -16,7 +32,7 @@ function ensure() {
     comp.threshold.value = -16;
     comp.ratio.value = 4;
     out = ctx.createGain();
-    out.gain.value = 0.8;
+    out.gain.value = targetGain();
     out.connect(comp);
     comp.connect(ctx.destination);
   }

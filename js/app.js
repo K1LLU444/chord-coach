@@ -8,6 +8,7 @@ import { songsView, decodeSongs } from './views/songs.js';
 import { quizView } from './views/quiz.js';
 import { sheetsView } from './views/sheets.js';
 import { styleBar } from './style.js';
+import { volumeControl } from './volume.js';
 
 const ICONS = {
   chords: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.8 4v16M15.2 4v16" stroke="currentColor" stroke-width="1.8"/><rect x="7.2" y="4" width="3.2" height="9" rx="1" fill="currentColor"/><rect x="13.6" y="4" width="3.2" height="9" rx="1" fill="currentColor"/></svg>',
@@ -32,6 +33,7 @@ for (const [name, view] of Object.entries(views)) {
 }
 
 document.querySelector('.app-header').after(styleBar());
+document.querySelector('.app-header').insertBefore(volumeControl(), tabs); // volume sits next to the title, on every tab
 
 let current = null;
 
