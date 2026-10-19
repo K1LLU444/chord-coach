@@ -3,6 +3,7 @@
 A piano chord helper for a Casio CT-S300 (61 keys), made for a complete beginner.
 Runs in the browser on Mac and iPhone (add it to the home screen to use it like an app, offline too).
 
+- **Playing style**: a switch under the header picks how the hands share a chord: *Bass + chord* (left hand root → 5th → octave, right hand chord) or *Chord + broken notes* (left hand chord, right hand notes one at a time). Every tab follows it.
 - **Chords**: search (`Am`, `F#m7`, `Bb major`, `C/E`…) or pick root + type. Shows the left hand
   (root → 5th → octave) in blue and the right hand chord in orange, with inversions and sound.
 - **Songs**: paste chords (plain, bars, `[Chorus]` sections, chords-over-lyrics, ChordPro). Step through them:

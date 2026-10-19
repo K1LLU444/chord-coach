@@ -1,10 +1,11 @@
 // Quiz tab: flashcards with spaced repetition. Chords you miss come back more often.
 
 import { h, segmented, toggle } from '../dom.js';
-import { CHORD_TYPES, ROOTS, TYPE_BY_ID, LH_RANGE, RH_RANGE, makeChord, rhVoicing, lhPattern, noteLabeler, noteName, gradeMarks } from '../theory.js';
+import { CHORD_TYPES, ROOTS, TYPE_BY_ID, LH_RANGE, RH_RANGE, makeChord, rhVoicing, lhPattern, handPlan, noteLabeler, noteName, gradeMarks } from '../theory.js';
 import { renderBoard, renderPanel, keyboardSVG } from '../keyboard.js';
 import { sheetElement } from '../sheet.js';
-import { playNote, playBoth, playSequence } from '../audio.js';
+import { playNote, playBoth, playSequence, playPlan } from '../audio.js';
+import { currentStyle, styleInfo } from '../style.js';
 import { settings, saveSettings, load, save } from '../store.js';
 
 const POOLS = {
@@ -77,12 +78,14 @@ export function quizView() {
     renderMastery();
   }
 
+  const planNow = () => handPlan(card, currentStyle());
   const answerBoard = () => {
     const el = h('div', { class: 'board' });
-    renderBoard(el, { lh: lhPattern(card), rh: rhVoicing(card), label: noteLabeler(card), showAll: settings.showAll, onKey: m => playNote(m), overview: false });
+    const plan = planNow();
+    renderBoard(el, { lh: plan.lh.notes, rh: plan.rh.notes, label: noteLabeler(card), showAll: settings.showAll, onKey: m => playNote(m), overview: false });
     return el;
   };
-  const reveal = () => settings.revealSound && playBoth(lhPattern(card), rhVoicing(card));
+  const reveal = () => settings.revealSound && playPlan(planNow());
   const nextBtn = () => h('button', { type: 'button', class: 'btn primary', onclick: nextCard, autofocus: true }, 'Next chord →');
   const prompt = text => h('div', { class: 'prompt' },
     h('div', { class: 'muted small' }, text),
@@ -114,14 +117,16 @@ export function quizView() {
     }, 'Show answer'));
     stage.replaceChildren(
       prompt('Play this on your keyboard, both hands:'),
-      h('p', { class: 'muted small' }, 'Left hand: root → 5th → octave. Right hand: the chord. Then check.'),
+      h('p', { class: 'muted small' }, `${styleInfo().play} Then check.`),
       actions, answer);
   }
 
   // See both hands (no note names) and choose the chord. The lowest blue key is the root.
   function nameMode() {
-    const lh = lhPattern(card);
-    const rh = rhVoicing(card);
+    const style = currentStyle();
+    const plan = planNow();
+    const lh = plan.lh.notes;
+    const rh = plan.rh.notes;
     const kb = h('div', { class: 'board' });
     const feedback = h('div', { class: 'feedback' });
     const draw = label => renderBoard(kb, { lh, rh, label, onKey: m => playNote(m), overview: false });
@@ -150,7 +155,7 @@ export function quizView() {
 
     draw(() => '');
     stage.replaceChildren(
-      h('div', { class: 'prompt' }, h('div', { class: 'muted small' }, 'Which chord is this? Hint: the lowest blue key is the root.')),
+      h('div', { class: 'prompt' }, h('div', { class: 'muted small' }, style === 'broken' ? 'Which chord is this? Hint: both hands play the same chord notes.' : 'Which chord is this? Hint: the lowest blue key is the root.')),
       kb,
       h('div', { class: 'options' }, buttons),
       feedback);
@@ -160,8 +165,10 @@ export function quizView() {
   // Three wrong checks and the answer is shown. The music sheet is an optional hint, and shows with the answer.
   function findMode() {
     const MAX_STRIKES = 3;
-    const lhGoal = lhPattern(card);
-    const rhGoal = rhVoicing(card);
+    const style = currentStyle();
+    const plan = handPlan(card, style);
+    const lhGoal = plan.lh.notes;
+    const rhGoal = plan.rh.notes;
     const flats = card.root.includes('b') || card.root === 'F';
     const range = { from: LH_RANGE.from, to: RH_RANGE.to };
     const marks = new Map();
@@ -211,7 +218,7 @@ export function quizView() {
       draw();
     });
 
-    const showSheet = () => sheet.replaceChildren(sheetElement({ chord: card, lh: lhGoal, rh: rhGoal }));
+    const showSheet = () => sheet.replaceChildren(sheetElement({ chord: card, plan }));
 
     const hint = () => {
       hinted = true;
@@ -237,7 +244,7 @@ export function quizView() {
     const part = (name, r) => `${name}: ${r.right} right${r.wrong ? `, ${r.wrong} wrong` : ''}${r.missing ? `, ${r.missing} missing` : ''}`;
 
     const check = () => {
-      const result = gradeMarks(card, marks);
+      const result = gradeMarks(card, marks, style);
       if (result.empty) return message.replaceChildren(h('p', { class: 'bad' }, 'Mark some keys first.'));
       if (result.ok) return finish(true);
 
@@ -245,11 +252,13 @@ export function quizView() {
       drawStrikes();
       if (strikes >= MAX_STRIKES) return finish(false);
       const left = MAX_STRIKES - strikes;
-      const lhNotesRight = !result.lh.wrong && !result.lh.missing;
-      const order = lhNotesRight && !result.lh.shape && !result.rh.wrong && !result.rh.missing;
+      const notesRight = !result.lh.wrong && !result.lh.missing && !result.rh.wrong && !result.rh.missing;
+      const almost = style === 'broken'
+        ? 'Almost! The notes are right, but blue (left hand) goes below middle C and orange (right hand) from middle C up.'
+        : 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.';
       message.replaceChildren(h('p', { class: 'bad' },
-        order
-          ? 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.'
+        notesRight
+          ? almost
           : `Not quite. ${part('Left hand', result.lh)} · ${part('Right hand', result.rh)}.`,
         ` ${left} strike${left === 1 ? '' : 's'} left.`));
     };
@@ -265,7 +274,9 @@ export function quizView() {
     stage.replaceChildren(
       prompt('Find the keys for'),
       h('p', { class: 'muted small mark-hint' },
-        `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
+        style === 'broken'
+          ? `Pick a colour, then tap keys. Blue = left hand: the whole chord (${lhGoal.length} keys), below middle C. Orange = right hand: the same ${card.pcs.length} notes, played one at a time, from middle C up.`
+          : `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
       sheet, strikesEl, brushes, scroller, overview, message, actions);
   }
 
@@ -379,6 +390,9 @@ export function quizView() {
       }, 'Chords to practise'),
       toggle('Play the answer', settings.revealSound, v => { settings.revealSound = v; saveSettings(); })),
     stats, stage, mastery);
+
+  // The playing style is changed from the bar under the header; redraw the current card (the ear quiz doesn't depend on it).
+  window.addEventListener('stylechange', () => card && settings.quizMode !== 'ear' && renderStage());
 
   renderStats();
   renderMastery();

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseChord, lhPattern, rhVoicing, smoothVoicings, parseSong, noteLabeler, enharmonicHints, pcOf, RH_RANGE, gradeMarks,
+  parseChord, lhPattern, rhVoicing, smoothVoicings, parseSong, noteLabeler, enharmonicHints, pcOf, RH_RANGE, gradeMarks, lhChord, handPlan,
 } from '../js/theory.js';
 
 // The original beginner table: chord → left hand pattern, right hand triad.
@@ -118,10 +118,50 @@ test('marked keys are graded: any octave and inversion, left hand root → 5th �
 
   const partial = gradeMarks(C, marks([36], [60, 63, 67]));
   assert.deepEqual(partial.lh, { right: 1, wrong: 0, missing: 2, shape: false });
-  assert.deepEqual(partial.rh, { right: 2, wrong: 1, missing: 1 });
+  assert.deepEqual(partial.rh, { right: 2, wrong: 1, missing: 1, shape: true });
   assert.equal(partial.ok, false);
 
   assert.equal(gradeMarks(C, new Map()).empty, true);
   assert.equal(gradeMarks(parseChord('Cdim'), marks([36, 42, 48], [60, 63, 66])).ok, true, 'dim has a flat 5th in the left hand');
   assert.equal(gradeMarks(parseChord('Cmaj7'), marks([36, 43, 48], [60, 64, 67])).ok, false, 'a 7th chord needs its 4th note');
+});
+
+test('left hand chord: every chord note once, between C3 and B3', () => {
+  assert.deepEqual(lhChord(parseChord('C')), [48, 52, 55]);
+  assert.deepEqual(lhChord(parseChord('F')), [48, 53, 57], 'F A C stacked as C F A so it stays in the window');
+  assert.deepEqual(lhChord(parseChord('B')), [51, 54, 59]);
+  assert.deepEqual(lhChord(parseChord('C/E')), [40, 48, 52, 55], 'slash chord adds its bass note below');
+  for (const root of ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']) {
+    for (const type of ['', 'm', '7', 'maj7', 'm7b5', '9']) {
+      const chord = parseChord(root + type);
+      const notes = lhChord(chord);
+      assert.ok(notes.every(m => m >= 48 && m <= 59), chord.symbol);
+      assert.deepEqual([...new Set(notes.map(m => m % 12))].sort((a, b) => a - b), [...chord.pcs].sort((a, b) => a - b), chord.symbol);
+    }
+  }
+});
+
+test('hand plan: which hand plays together and which one at a time', () => {
+  const C = parseChord('C');
+  const bass = handPlan(C, 'bass');
+  assert.deepEqual([bass.lh.together, bass.rh.together], [false, true]);
+  assert.deepEqual(bass.lh.notes, [36, 43, 48]);
+  const broken = handPlan(C, 'broken', { inversion: 1 });
+  assert.deepEqual([broken.lh.together, broken.rh.together], [true, false]);
+  assert.deepEqual(broken.rh.notes, [64, 67, 72], '1st inversion, played low to high');
+  assert.deepEqual(handPlan(C, 'broken', { rh: [67, 72, 76] }).rh.notes, [67, 72, 76], 'a ready-made voicing wins');
+});
+
+test('grading the "chord + broken notes" style', () => {
+  const marks = (lh, rh) => new Map([...lh.map(m => [m, 'lh']), ...rh.map(m => [m, 'rh'])]);
+  const C = parseChord('C');
+  assert.equal(gradeMarks(C, marks([48, 52, 55], [60, 64, 67]), 'broken').ok, true);
+  assert.equal(gradeMarks(C, marks([40, 48, 55], [64, 67, 72]), 'broken').ok, true, 'any octave below middle C, any inversion');
+  const misplaced = gradeMarks(C, marks([60, 64, 67], [72, 76, 79]), 'broken');
+  assert.equal(misplaced.ok, false);
+  assert.deepEqual([misplaced.lh.wrong, misplaced.lh.missing, misplaced.lh.shape], [0, 0, false], 'right notes, wrong place');
+  const partial = gradeMarks(C, marks([48, 52], [60, 63, 67]), 'broken');
+  assert.deepEqual(partial.lh, { right: 2, wrong: 0, missing: 1, shape: true });
+  assert.deepEqual(partial.rh, { right: 2, wrong: 1, missing: 1, shape: true });
+  assert.equal(gradeMarks(C, marks([36, 43, 48], [60, 64, 67]), 'bass').ok, true, 'bass style is unchanged');
 });

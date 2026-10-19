@@ -22,6 +22,7 @@ export function save(key, value) {
 export const settings = Object.assign({
   tab: 'chords',
   showAll: false,
+  style: 'bass',
   smooth: true,
   ghost: true,
   soundOnChange: false,

@@ -80,3 +80,15 @@ export function playBoth(lh, rh) {
   playSequence(lh);
   playChord(rh);
 }
+
+/** One hand: its notes together as a chord, or one after another. */
+export function playHand(hand) {
+  if (hand.together) playChord(hand.notes);
+  else playSequence(hand.notes);
+}
+
+/** Both hands starting together, as described by `handPlan`. */
+export function playPlan(plan) {
+  playHand(plan.lh);
+  playHand(plan.rh);
+}

@@ -318,43 +318,85 @@ export function ugToText(content, capo = 0) {
   return out.join('\n').trim();
 }
 
+/** The ways the two hands can share a chord. */
+export const STYLES = [
+  {
+    id: 'bass',
+    name: 'Bass + chord',
+    blurb: 'Left hand: one bass note at a time (root → 5th → octave). Right hand: the whole chord together.',
+    play: 'Left hand: root → 5th → octave, one key at a time. Right hand: the whole chord together.',
+  },
+  {
+    id: 'broken',
+    name: 'Chord + broken notes',
+    blurb: 'Left hand: the whole chord together. Right hand: the same chord notes one at a time, low to high.',
+    play: 'Left hand: the whole chord together. Right hand: the same notes one at a time, low to high.',
+  },
+];
+
+/**
+ * Left hand chord: every chord note placed once between C3 and B3 (just below middle C), so chords stay
+ * close together and never get muddy. Slash chords add their bass note lower down.
+ */
+export function lhChord(chord) {
+  const notes = [...new Set(chord.pcs)].map(pc => nextAtOrAbove(pc, 48)).sort((a, b) => a - b);
+  if (chord.bass) notes.unshift(nextAtOrAbove(chord.bassPc, LH_RANGE.from));
+  return notes;
+}
+
+/**
+ * Which keys each hand plays, and whether they are pressed together (a chord) or one after another.
+ * `rh` can supply a ready-made right-hand voicing (used by songs, which pick smooth inversions).
+ */
+export function handPlan(chord, style = 'bass', { inversion = 0, rh } = {}) {
+  const right = rh ?? rhVoicing(chord, inversion);
+  return style === 'broken'
+    ? { lh: { notes: lhChord(chord), together: true }, rh: { notes: right, together: false } }
+    : { lh: { notes: lhPattern(chord), together: false }, rh: { notes: right, together: true } };
+}
+
 /**
  * Compare keys marked on a keyboard with a chord's answer. marks: Map(midi → 'lh' | 'rh').
- * Left hand must be root → 5th → octave (low to high) but may sit in any octave.
- * Right hand needs exactly the chord's notes, in any octave or order (so any inversion works).
+ * Right-hand notes may be in any octave or order (so any inversion works).
+ * - 'bass' style: left hand must be root → 5th → octave (low to high), but may sit in any octave.
+ * - 'broken' style: left hand is the chord notes below middle C; right hand the same notes from middle C up
+ *   (the order they are played in can't be marked, so only the notes and their position are checked).
  */
-export function gradeMarks(chord, marks) {
+export function gradeMarks(chord, marks, style = 'bass') {
   const blue = [...marks].filter(([, hand]) => hand === 'lh').map(([m]) => m).sort((a, b) => a - b);
   const orange = [...marks].filter(([, hand]) => hand === 'rh').map(([m]) => m);
-  const goal = lhPattern(chord);
 
-  const pool = goal.map(m => m % 12);
-  let lhRight = 0;
-  for (const m of blue) {
-    const i = pool.indexOf(m % 12);
-    if (i > -1) {
-      pool.splice(i, 1);
-      lhRight++;
+  const compare = (keys, wantPcs) => {
+    const covered = new Set(keys.map(m => m % 12).filter(pc => wantPcs.includes(pc))).size;
+    return { right: covered, wrong: keys.filter(m => !wantPcs.includes(m % 12)).length, missing: wantPcs.length - covered };
+  };
+
+  const rh = compare(orange, chord.pcs);
+  let lh;
+  if (style === 'broken') {
+    const want = [...new Set(chord.bass ? [...chord.pcs, chord.bassPc] : chord.pcs)];
+    lh = { ...compare(blue, want), shape: blue.length > 0 && blue.every(m => m < RH_RANGE.from) };
+    rh.shape = orange.length > 0 && orange.every(m => m >= RH_RANGE.from);
+  } else {
+    const goal = lhPattern(chord);
+    const pool = goal.map(m => m % 12);
+    let right = 0;
+    for (const m of blue) {
+      const i = pool.indexOf(m % 12);
+      if (i > -1) {
+        pool.splice(i, 1);
+        right++;
+      }
     }
+    lh = {
+      right,
+      wrong: blue.length - right,
+      missing: goal.length - right,
+      shape: blue.length === goal.length && blue.every((m, i) => m - blue[0] === goal[i] - goal[0]) && blue[0] % 12 === goal[0] % 12,
+    };
+    rh.shape = true;
   }
-  const lh = {
-    right: lhRight,
-    wrong: blue.length - lhRight,
-    missing: goal.length - lhRight,
-    shape: blue.length === goal.length && blue.every((m, i) => m - blue[0] === goal[i] - goal[0]) && blue[0] % 12 === goal[0] % 12,
-  };
 
-  const found = new Set(orange.map(m => m % 12).filter(pc => chord.pcs.includes(pc))).size;
-  const rh = {
-    right: found,
-    wrong: orange.filter(m => !chord.pcs.includes(m % 12)).length,
-    missing: chord.pcs.length - found,
-  };
-
-  return {
-    empty: marks.size === 0,
-    ok: lh.shape && !lh.wrong && !lh.missing && !rh.wrong && !rh.missing,
-    lh,
-    rh,
-  };
+  const perfect = r => !r.wrong && !r.missing && r.shape;
+  return { empty: marks.size === 0, ok: perfect(lh) && perfect(rh), lh, rh };
 }

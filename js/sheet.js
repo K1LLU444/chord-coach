@@ -1,5 +1,6 @@
 // Draws one chord on a grand staff (treble clef for the right hand, bass clef for the left hand).
-// Left hand: three quarter notes (root → 5th → octave). Right hand: the chord as a dotted half note in 3/4.
+// Each hand is either a stacked chord (played together) or a row of quarter notes (played one after another),
+// following the playing style. The time signature counts the notes of whichever hand plays one at a time.
 
 import { h } from './dom.js';
 import { noteLabeler } from './theory.js';
@@ -14,11 +15,11 @@ const TOP = 44;
 const MARGIN = 36;
 const X0 = 38; // the strip to the left of this holds the line and space letters
 const X1 = W - 12;
-const NOTE_X = [128, 172, 216];
+const FIRST_X = 128;
 const y = step => MARGIN + (TOP - step) * STEP;
 
-const TREBLE = { lines: [30, 32, 34, 36, 38], low: 28, high: 40 };
-const BASS = { lines: [18, 20, 22, 24, 26], low: 16, high: 28 };
+const TREBLE = { lines: [30, 32, 34, 36, 38], low: 28, high: 40, mid: 34 };
+const BASS = { lines: [18, 20, 22, 24, 26], low: 16, high: 28, mid: 22 };
 
 /** Staff step of a note spelled `name` (like "Bb" or "E#") at MIDI pitch `midi`. C4 = 28. */
 export function stepOf(name, midi) {
@@ -30,12 +31,13 @@ export function stepOf(name, midi) {
 export const stepLetter = step => 'CDEFGAB'[((step % 7) + 7) % 7];
 
 /**
- * Stem direction and note-head offsets for a stacked chord. Notes a step apart can't share a column,
- * so one of them moves to the other side of the stem (dx = ±1).
+ * Stem direction and note-head offsets for a stacked chord. `mid` is the staff's middle line: chords
+ * mostly below it get a stem going up. Notes a step apart can't share a column, so one of them moves to
+ * the other side of the stem (dx = ±1).
  */
-export function chordLayout(steps) {
+export function chordLayout(steps, mid = 34) {
   const sorted = [...steps].sort((a, b) => a - b);
-  const up = (sorted[0] + sorted.at(-1)) / 2 < 34;
+  const up = (sorted[0] + sorted.at(-1)) / 2 < mid;
   const order = up ? sorted : [...sorted].reverse();
   const notes = [];
   for (const step of order) {
@@ -82,26 +84,97 @@ function accidental(svg, x, step, name, color) {
   if (sign) svg.append(el('text', { x, y: y(step) + (sign === '♯' ? 6 : 5), class: 'acc', style: `fill:${color}` }, sign));
 }
 
-/** The staff, clefs and time signature. Notes are added only when `lh`/`rh` are given. */
-export function sheetSVG({ chord, lh = [], rh = [], guide = true }) {
-  const reveal = lh.length + rh.length > 0;
+const named = (notes, label) => notes.map(midi => ({ midi, name: label(midi), step: stepOf(label(midi), midi) }));
+
+/** Notes played one after another: quarter notes with stems. */
+function drawSequence(svg, notes, staff, color, label, beats) {
+  const gap = beats <= 3 ? 44 : beats === 4 ? 30 : 24;
+  named(notes, label).forEach(({ name, step }, i) => {
+    const cx = FIRST_X + i * gap;
+    const up = step < staff.mid;
+    addLedgers(svg, step, staff, cx);
+    accidental(svg, cx - 10, step, name, color);
+    head(svg, cx, step, color, false);
+    const x = up ? cx + 5.4 : cx - 5.4;
+    svg.append(el('line', { x1: x, x2: x, y1: y(step), y2: y(step) + (up ? -7 : 7) * STEP, class: 'stem', style: `stroke:${color}` }));
+  });
+}
+
+/** Notes played together: one stacked chord lasting the whole bar (dotted half in 3/4, half in 2/4, whole in 4/4). */
+function drawChord(svg, notes, staff, color, label, beats) {
+  const cx = FIRST_X;
+  const items = named(notes, label);
+  const byStep = new Map(items.map(n => [n.step, n]));
+  const layout = chordLayout(items.map(n => n.step), staff.mid);
+  const steps = layout.notes.map(n => n.step);
+  const lo = Math.min(...steps);
+  const hi = Math.max(...steps);
+  const hasLeft = layout.notes.some(n => n.dx < 0);
+  const hasRight = layout.notes.some(n => n.dx > 0);
+
+  for (const n of layout.notes) {
+    addLedgers(svg, n.step, staff, cx + n.dx * 11);
+    head(svg, cx + n.dx * 11, n.step, color, true);
+  }
+  if (beats < 4) {
+    const stemX = layout.up ? cx + 5.4 : cx - 5.4;
+    svg.append(el('line', {
+      x1: stemX, x2: stemX,
+      y1: y(layout.up ? lo : hi), y2: layout.up ? y(hi) - 7 * STEP : y(lo) + 7 * STEP,
+      class: 'stem', style: `stroke:${color}`,
+    }));
+  }
+  if (beats === 3) {
+    // The dot sits in the space above a line note.
+    for (const n of layout.notes) {
+      svg.append(el('circle', { cx: cx + (hasRight ? 22 : 12), cy: y(n.step + (n.step % 2 === 0 ? 1 : 0)), r: 1.9, style: `fill:${color}` }));
+    }
+  }
+
+  // Accidentals go to the left of the chord, staggered when notes are close together.
+  const placed = [];
+  for (const n of [...layout.notes].sort((a, b) => b.step - a.step)) {
+    const name = byStep.get(n.step).name;
+    if (!accidentalOf(name)) continue;
+    let col = 0;
+    while (placed.some(p => p.col === col && Math.abs(p.step - n.step) < 6)) col++;
+    placed.push({ step: n.step, col });
+    accidental(svg, cx - (hasLeft ? 21 : 10) - col * 10, n.step, name, color);
+  }
+}
+
+/**
+ * The staff, clefs, time signature and letter guide. Notes are added when a `plan` (from handPlan) is given:
+ * plan = { lh: { notes, together }, rh: { notes, together } }.
+ */
+export function sheetSVG({ chord, plan, guide = true }) {
+  const reveal = Boolean(plan);
   const label = noteLabeler(chord);
+  const hands = reveal
+    ? [
+      { hand: plan.lh, staff: BASS, color: 'var(--lh)' },
+      { hand: plan.rh, staff: TREBLE, color: 'var(--rh)' },
+    ]
+    : [];
+  const sequence = hands.find(({ hand }) => !hand.together);
+  const beats = sequence ? sequence.hand.notes.length : 3;
+
   const svg = el('svg', { viewBox: `0 0 ${W} ${y(12) + 14}`, class: 'sheet', role: 'img' });
   svg.setAttribute('aria-label', reveal
-    ? `Sheet music for ${chord.symbol}: left hand ${lh.map(label).join(' ')}, right hand ${rh.map(label).join(' ')}`
+    ? `Sheet music for ${chord.symbol}: left hand ${plan.lh.notes.map(label).join(' ')}, right hand ${plan.rh.notes.map(label).join(' ')}`
     : `Empty sheet music for ${chord.symbol}`);
 
-  svg.append(el('text', { x: NOTE_X[0] - 6, y: 28, class: 'chord-symbol' }, chord.symbol));
+  svg.append(el('text', { x: FIRST_X - 6, y: 28, class: 'chord-symbol' }, chord.symbol));
 
   for (const staff of [TREBLE, BASS]) {
     for (const s of staff.lines) svg.append(el('line', { x1: X0, x2: X1, y1: y(s), y2: y(s), class: 'line' }));
   }
+
   // Guide: the letter of every line (next to the staff) and space (one column further left).
   // Letters your chord uses are coloured like the hand that plays them.
   if (guide) {
     const used = new Map();
-    lh.forEach(m => used.set(stepOf(label(m), m), 'var(--lh)'));
-    rh.forEach(m => used.set(stepOf(label(m), m), 'var(--rh)'));
+    for (const { hand, color } of hands) for (const m of hand.notes) used.set(stepOf(label(m), m), color);
     const steps = new Set([...TREBLE.lines, ...BASS.lines, 31, 33, 35, 37, 19, 21, 23, 25, 28, ...used.keys()]);
     for (const step of steps) {
       const color = used.get(step);
@@ -121,62 +194,13 @@ export function sheetSVG({ chord, lh = [], rh = [], guide = true }) {
   svg.append(el('text', { x: X0 + 2, y: y(28) + 1, class: 'clef treble' }, '𝄞'));
   svg.append(el('text', { x: X0 + 2, y: y(20) + 2, class: 'clef bass' }, '𝄢'));
   for (const [hi, lo] of [[36, 32], [24, 20]]) {
-    svg.append(el('text', { x: X0 + 46, y: y(hi) + 7, class: 'time' }, '3'));
+    svg.append(el('text', { x: X0 + 46, y: y(hi) + 7, class: 'time' }, String(beats)));
     svg.append(el('text', { x: X0 + 46, y: y(lo) + 7, class: 'time' }, '4'));
   }
 
-  if (!reveal) return svg;
-
-  const blue = 'var(--lh)';
-  const orange = 'var(--rh)';
-
-  lh.slice(0, NOTE_X.length).forEach((midi, i) => {
-    const name = label(midi);
-    const step = stepOf(name, midi);
-    const cx = NOTE_X[i];
-    const up = step < 22;
-    addLedgers(svg, step, BASS, cx);
-    accidental(svg, cx - 10, step, name, blue);
-    head(svg, cx, step, blue, false);
-    const x = up ? cx + 5.4 : cx - 5.4;
-    svg.append(el('line', { x1: x, x2: x, y1: y(step), y2: y(step) + (up ? -7 : 7) * STEP, class: 'stem', style: `stroke:${blue}` }));
-  });
-
-  if (rh.length) {
-    const cx = NOTE_X[0];
-    const named = rh.map(midi => ({ midi, name: label(midi), step: stepOf(label(midi), midi) }));
-    const layout = chordLayout(named.map(n => n.step));
-    const byStep = new Map(named.map(n => [n.step, n]));
-    const steps = layout.notes.map(n => n.step);
-    const lo = Math.min(...steps);
-    const hi = Math.max(...steps);
-    const hasLeft = layout.notes.some(n => n.dx < 0);
-    const hasRight = layout.notes.some(n => n.dx > 0);
-
-    for (const n of layout.notes) {
-      addLedgers(svg, n.step, TREBLE, cx + n.dx * 11);
-      head(svg, cx + n.dx * 11, n.step, orange, true);
-    }
-    const stemX = layout.up ? cx + 5.4 : cx - 5.4;
-    svg.append(layout.up
-      ? el('line', { x1: stemX, x2: stemX, y1: y(lo), y2: y(hi) - 7 * STEP, class: 'stem', style: `stroke:${orange}` })
-      : el('line', { x1: stemX, x2: stemX, y1: y(hi), y2: y(lo) + 7 * STEP, class: 'stem', style: `stroke:${orange}` }));
-
-    // The dot sits in the space above a line note.
-    for (const n of layout.notes) {
-      svg.append(el('circle', { cx: cx + (hasRight ? 22 : 12), cy: y(n.step + (n.step % 2 === 0 ? 1 : 0)), r: 1.9, style: `fill:${orange}` }));
-    }
-
-    // Accidentals go to the left of the chord, staggered when notes are close together.
-    const placed = [];
-    for (const n of [...layout.notes].sort((a, b) => b.step - a.step)) {
-      const name = byStep.get(n.step).name;
-      if (!accidentalOf(name)) continue;
-      let col = 0;
-      while (placed.some(p => p.col === col && Math.abs(p.step - n.step) < 6)) col++;
-      placed.push({ step: n.step, col });
-      accidental(svg, cx - (hasLeft ? 21 : 10) - col * 10, n.step, name, orange);
-    }
+  for (const { hand, staff, color } of hands) {
+    if (!hand.notes.length) continue;
+    (hand.together ? drawChord : drawSequence)(svg, hand.notes, staff, color, label, beats);
   }
   return svg;
 }

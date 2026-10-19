@@ -2,10 +2,11 @@
 
 import { h, fill, segmented, toggle } from '../dom.js';
 import {
-  CHORD_TYPES, ROOTS, makeChord, parseChord, pcOf, rhVoicing, lhPattern, noteLabeler, enharmonicHints, inversionName,
+  CHORD_TYPES, ROOTS, makeChord, parseChord, pcOf, handPlan, noteLabeler, enharmonicHints, inversionName,
 } from '../theory.js';
 import { renderBoard } from '../keyboard.js';
-import { playNote, playChord, playSequence, playBoth } from '../audio.js';
+import { playNote, playHand, playPlan } from '../audio.js';
+import { currentStyle, handText } from '../style.js';
 import { settings, saveSettings } from '../store.js';
 
 // Same order as the original chord table.
@@ -73,8 +74,9 @@ export function chordsView() {
   }
 
   function renderResult() {
-    const lh = lhPattern(chord);
-    const rh = rhVoicing(chord, inversion);
+    const plan = handPlan(chord, currentStyle(), { inversion });
+    const lh = plan.lh.notes;
+    const rh = plan.rh.notes;
     const label = noteLabeler(chord);
     const board = h('div', { class: 'board' });
     const hints = enharmonicHints(chord);
@@ -87,10 +89,10 @@ export function chordsView() {
           h('div', { class: 'long' }, chord.name),
           h('div', { class: 'muted' }, 'Notes: ', chord.notes.join(' · ')))),
       h('div', { class: 'hands' },
-        hand('lh', 'Left hand', lh.map(label).join(' → '), () => playSequence(lh)),
-        hand('rh', 'Right hand', rh.map(label).join(' + '), () => playChord(rh))),
+        hand('lh', 'Left hand', handText(plan.lh, label), () => playHand(plan.lh)),
+        hand('rh', 'Right hand', handText(plan.rh, label), () => playHand(plan.rh))),
       h('div', { class: 'row wrap' },
-        h('button', { type: 'button', class: 'btn primary', onclick: () => playBoth(lh, rh) }, '▶ Play both hands'),
+        h('button', { type: 'button', class: 'btn primary', onclick: () => playPlan(plan) }, '▶ Play both hands'),
         chord.pcs.length > 1 && h('div', { class: 'inv' },
           h('span', { class: 'muted small' }, 'Right-hand shape'),
           segmented(invOptions, inversion, k => { inversion = k; renderResult(); }, 'Inversion'))),
@@ -108,24 +110,29 @@ export function chordsView() {
   function cheatSheet() {
     const row = c => h('tr', { tabindex: 0, onclick: () => pick(c), onkeydown: e => e.key === 'Enter' && pick(c) },
       h('th', { scope: 'row' }, c.name),
-      h('td', { class: 'lh-text' }, lhPattern(c).map(noteLabeler(c)).join(' → ')),
-      h('td', { class: 'rh-text' }, c.notes.join(' + ')));
+      h('td', { class: 'lh-text' }, handText(handPlan(c, currentStyle()).lh, noteLabeler(c))),
+      h('td', { class: 'rh-text' }, handText(handPlan(c, currentStyle()).rh, noteLabeler(c))));
     const pick = c => {
       select(c);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
     const majMin = TABLE_ORDER.flatMap(r => [makeChord(r, CHORD_TYPES[0]), makeChord(r, CHORD_TYPES[1])]);
+    const tbody = h('tbody');
+    const renderRows = () => tbody.replaceChildren(...majMin.map(row));
+    renderRows();
+    window.addEventListener('stylechange', renderRows);
     return h('details', { class: 'card cheat' },
       h('summary', {}, 'Cheat sheet: all 24 major & minor chords'),
       h('div', { class: 'table-wrap' },
         h('table', {},
           h('thead', {}, h('tr', {}, h('th', {}, 'Chord'), h('th', {}, 'Left hand'), h('th', {}, 'Right hand'))),
-          h('tbody', {}, majMin.map(row)))),
+          tbody)),
       h('p', { class: 'muted small' }, 'Tap a row to see it on the keyboard.'));
   }
 
   renderPickers();
   renderResult();
+  window.addEventListener('stylechange', renderResult);
 
   return {
     el: h('div', { class: 'view' }, input, message, roots, types, result, cheatSheet()),

@@ -1,9 +1,10 @@
 // Songs tab: save chord progressions, then step (or hover) through them on the keyboard.
 
 import { h, fill, toast, toggle } from '../dom.js';
-import { parseSong, smoothVoicings, rhVoicing, lhPattern, noteLabeler, inversionName, ugToText } from '../theory.js';
+import { parseSong, smoothVoicings, rhVoicing, handPlan, noteLabeler, inversionName, ugToText } from '../theory.js';
 import { renderBoard } from '../keyboard.js';
-import { playNote, playBoth } from '../audio.js';
+import { playNote, playHand, playPlan } from '../audio.js';
+import { currentStyle, handText } from '../style.js';
 import { settings, saveSettings, loadSongs, saveSongs, uid } from '../store.js';
 import { hand } from './chords.js';
 import { ugPanel, openUgLink, cleanUrl, isUgUrl } from '../ultimate-guitar.js';
@@ -65,6 +66,7 @@ export function songsView() {
   let songs = loadSongs();
   let mode = 'list';
   let keyHandler = null;
+  let refresh = null; // redraws the open song when the playing style changes
   const el = h('div', { class: 'view' });
 
   const persist = () => saveSongs(songs);
@@ -72,6 +74,7 @@ export function songsView() {
   function show(next, song) {
     mode = next;
     keyHandler = null;
+    refresh = null;
     el.replaceChildren(next === 'list' ? listUI() : next === 'edit' ? editUI(song) : playerUI(song));
     window.scrollTo(0, 0);
   }
@@ -82,6 +85,8 @@ export function songsView() {
     songs = loadSongs();
     if (mode === 'list') show('list');
   });
+
+  window.addEventListener('stylechange', () => refresh?.());
 
   document.addEventListener('keydown', e => {
     if (!keyHandler || el.closest('[hidden]')) return;
@@ -267,7 +272,8 @@ export function songsView() {
       chipsEl.append(chip);
     });
 
-    const playCurrent = () => playBoth(lhPattern(p.chords[idx]), voicings[idx].notes);
+    const planAt = i => handPlan(p.chords[i], currentStyle(), { rh: voicings[i].notes });
+    const playCurrent = () => playPlan(planAt(idx));
 
     function go(i, scroll = false) {
       const next = Math.max(0, Math.min(p.chords.length - 1, i));
@@ -281,10 +287,10 @@ export function songsView() {
     function update() {
       const c = p.chords[idx];
       const v = voicings[idx];
-      const lh = lhPattern(c);
+      const plan = planAt(idx);
       const label = noteLabeler(c);
       const nextChord = p.chords[idx + 1];
-      const ghosts = settings.ghost && nextChord ? [...lhPattern(nextChord), ...voicings[idx + 1].notes] : [];
+      const ghosts = settings.ghost && nextChord ? [...planAt(idx + 1).lh.notes, ...planAt(idx + 1).rh.notes] : [];
       const sub = [sectionAt(idx), settings.smooth && c.pcs.length > 1 ? inversionName(v.k) : null].filter(Boolean).join(' · ');
 
       now.replaceChildren(
@@ -295,9 +301,9 @@ export function songsView() {
             sub && h('div', { class: 'muted small' }, sub)),
           h('div', { class: 'next' }, nextChord ? ['Next', h('strong', {}, nextChord.symbol)] : ['Last', h('strong', {}, '—')])),
         h('div', { class: 'hands compact' },
-          hand('lh', 'Left', lh.map(label).join(' → '), () => playBoth(lh, [])),
-          hand('rh', 'Right', v.notes.map(label).join(' + '), () => playBoth([], v.notes))));
-      renderBoard(board, { lh, rh: v.notes, ghosts, label, showAll: settings.showAll, onKey: m => playNote(m), overview: false });
+          hand('lh', 'Left', handText(plan.lh, label), () => playHand(plan.lh)),
+          hand('rh', 'Right', handText(plan.rh, label), () => playHand(plan.rh))));
+      renderBoard(board, { lh: plan.lh.notes, rh: plan.rh.notes, ghosts, label, showAll: settings.showAll, onKey: m => playNote(m), overview: false });
       counter.textContent = `${idx + 1} / ${p.chords.length}`;
       chipEls.forEach((b, i) => b.classList.toggle('active', i === idx));
     }
@@ -360,6 +366,7 @@ export function songsView() {
         toggle('Name every key', settings.showAll, v => { settings.showAll = v; saveSettings(); update(); })),
       p.unknown.length > 0 && h('p', { class: 'warn' }, `Skipped (couldn't read): ${p.unknown.join(', ')}`));
 
+    refresh = update;
     update();
     return view;
   }
