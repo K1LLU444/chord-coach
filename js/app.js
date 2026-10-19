@@ -92,5 +92,18 @@ window.addEventListener('hashchange', handleImport);
 document.addEventListener('pointerdown', unlock, { once: true });
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // When a new version takes over, offer to reload (the page is still running the old files until then).
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || document.querySelector('.update-banner')) return; // first install: nothing to update
+    document.body.append(h('div', { class: 'update-banner', role: 'status' },
+      h('span', {}, 'A new version is ready.'),
+      h('button', { type: 'button', class: 'btn small primary', onclick: () => location.reload() }, 'Reload')));
+    showVersion();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // Look for a new version now and whenever the app comes back to the screen (an installed iPhone app may stay open for days).
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
 }

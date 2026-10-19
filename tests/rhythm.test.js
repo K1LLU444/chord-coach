@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_FEEL, feelFromStrumming, pulseSeconds, signatureOf, barEvents, clickLevel } from '../js/rhythm.js';
+import { DEFAULT_FEEL, feelFromStrumming, pulseSeconds, signatureOf, barEvents, clickLevel, barAtPosition } from '../js/rhythm.js';
 import { handPlan, parseChord, parseSong } from '../js/theory.js';
 import { analyzeSong, simplerChord, countText } from '../js/analyze.js';
 
@@ -100,4 +100,19 @@ test('song form: section order and the distinct chord lines', async () => {
   assert.deepEqual(form.groups[0].chords, ['Bb', 'Dm', 'Eb', 'Ebm']);
   assert.deepEqual(songForm({ text: 'C G Am F' }).order, ['Song'], 'a song without headings is one part');
   assert.deepEqual(songForm({ text: 'C G\n[Chorus]\nAm F' }).order, ['Start', 'Chorus'], 'chords before the first heading');
+});
+
+test('sample timeline: count-in, the bars, and looping', () => {
+  const once = { lead: 1, count: 3, loop: false };
+  assert.deepEqual(barAtPosition(0, once), { countIn: true });
+  assert.deepEqual(barAtPosition(1, once), { countIn: false, index: 0, pass: 0 });
+  assert.deepEqual(barAtPosition(3, once), { countIn: false, index: 2, pass: 0 });
+  assert.equal(barAtPosition(4, once), null, 'a sample that is not looping finishes');
+
+  const loop = { lead: 1, count: 3, loop: true };
+  assert.deepEqual(barAtPosition(4, loop), { countIn: false, index: 0, pass: 1 }, 'starts over at the first bar');
+  assert.deepEqual(barAtPosition(9, loop), { countIn: false, index: 2, pass: 2 });
+  assert.equal(barAtPosition(0, loop).countIn, true, 'the count-in only comes first');
+  assert.deepEqual(barAtPosition(1, { lead: 0, count: 1, loop: true }), { countIn: false, index: 0, pass: 1 }, 'a one-bar loop repeats that bar');
+  assert.equal(Array.from({ length: 1000 }, (_, k) => barAtPosition(k, loop)).every(Boolean), true, 'a loop never runs out');
 });

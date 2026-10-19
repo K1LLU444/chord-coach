@@ -16,8 +16,9 @@ function svg(tag, attrs) {
 /**
  * marks: Map(midi → 'lh' | 'rh' | 'pick' | 'right' | 'wrong'); ghosts: Set(midi) drawn dashed (next chord).
  * label(midi) names a marked key; showAll names every key; mini draws a small unlabeled overview.
+ * fingers: Map(midi → 1…5) draws the finger number on a marked key.
  */
-export function keyboardSVG({ from, to, marks = new Map(), ghosts = new Set(), label, showAll = false, mini = false }) {
+export function keyboardSVG({ from, to, marks = new Map(), ghosts = new Set(), label, showAll = false, mini = false, fingers = null }) {
   const W = 40, H = mini ? 110 : 170, BW = 26, BH = mini ? 68 : 106;
   const whites = [];
   for (let m = from; m <= to; m++) if (!isBlack(m)) whites.push(m);
@@ -42,6 +43,15 @@ export function keyboardSVG({ from, to, marks = new Map(), ghosts = new Set(), l
       const t = svg('text', { x: kx + (black ? BW : W - 2) / 2, y: (black ? BH : H) - (black ? 12 : 16), class: hint ? 'hint' : '' });
       t.textContent = text;
       g.append(t);
+    }
+    const finger = mark && fingers?.get(m);
+    if (finger) {
+      const cx = kx + (black ? BW : W - 2) / 2;
+      const cy = black ? BH - 52 : H - 52;
+      g.append(svg('circle', { cx, cy, r: black ? 9 : 11, class: 'fing-bg' }));
+      const f = svg('text', { x: cx, y: cy + (black ? 4.5 : 5.5), class: 'fing' });
+      f.textContent = finger;
+      g.append(f);
     }
     return g;
   };
@@ -82,12 +92,12 @@ export function renderPanel(container, opts) {
  * The standard two-hand view: left hand panel (C2–B3), right hand panel (C4–B5),
  * and a mini map of the whole 61-key CT-S300.
  */
-export function renderBoard(container, { lh = [], rh = [], ghosts = [], label, showAll, onKey, overview = true }) {
+export function renderBoard(container, { lh = [], rh = [], ghosts = [], label, showAll, onKey, overview = true, fingers = null }) {
   const marks = new Map([...lh.map(m => [m, 'lh']), ...rh.map(m => [m, 'rh'])]);
   const ghostSet = new Set(ghosts.filter(m => !marks.has(m)));
   const panel = (title, cls, range) => {
     const box = h('div', { class: 'kb-box' });
-    renderPanel(box, { ...range, marks, ghosts: ghostSet, label, showAll, onKey });
+    renderPanel(box, { ...range, marks, ghosts: ghostSet, label, showAll, onKey, fingers });
     return h('div', { class: 'panel' }, h('div', { class: 'panel-label' }, h('span', { class: `dot ${cls}` }), title), box);
   };
   const parts = [h('div', { class: 'panels' }, panel('Left hand', 'lh', LH_RANGE), panel('Right hand', 'rh', RH_RANGE))];

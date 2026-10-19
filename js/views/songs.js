@@ -5,6 +5,7 @@ import { parseSong, smoothVoicings, rhVoicing, handPlan, noteLabeler, inversionN
 import { renderBoard } from '../keyboard.js';
 import { playNote, playHand, playPlan } from '../audio.js';
 import { currentStyle, handText } from '../style.js';
+import { fingerPlan, withFingers } from '../fingers.js';
 import { analyzeSong, countText } from '../analyze.js';
 import { playSample, startMetronome } from '../player.js';
 import { cleanFeel, feelFromStrumming } from '../rhythm.js';
@@ -300,6 +301,7 @@ export function songsView() {
       const c = p.chords[idx];
       const v = voicings[idx];
       const plan = planAt(idx);
+      const fp = fingerPlan(c, plan);
       const label = noteLabeler(c);
       const nextChord = p.chords[idx + 1];
       const ghosts = settings.ghost && nextChord ? [...planAt(idx + 1).lh.notes, ...planAt(idx + 1).rh.notes] : [];
@@ -313,9 +315,9 @@ export function songsView() {
             sub && h('div', { class: 'muted small' }, sub)),
           h('div', { class: 'next' }, nextChord ? ['Next', h('strong', {}, nextChord.symbol)] : ['Last', h('strong', {}, '—')])),
         h('div', { class: 'hands compact' },
-          hand('lh', 'Left', handText(plan.lh, label), () => playHand(plan.lh), plan.lh.note),
-          hand('rh', 'Right', handText(plan.rh, label), () => playHand(plan.rh), plan.rh.note)));
-      renderBoard(board, { lh: plan.lh.notes, rh: plan.rh.notes, ghosts, label, showAll: settings.showAll, onKey: m => playNote(m), overview: false });
+          hand('lh', 'Left', handText(plan.lh, label), () => playHand(plan.lh), withFingers(plan.lh.note, fp.lh, settings.fingers)),
+          hand('rh', 'Right', handText(plan.rh, label), () => playHand(plan.rh), withFingers(plan.rh.note, fp.rh, settings.fingers))));
+      renderBoard(board, { lh: plan.lh.notes, rh: plan.rh.notes, ghosts, label, showAll: settings.showAll, onKey: m => playNote(m), overview: false, fingers: settings.fingers ? fp.map : undefined });
       counter.textContent = `${idx + 1} / ${p.chords.length}`;
       chipEls.forEach((b, i) => b.classList.toggle('active', i === idx));
       labelButtons?.(); // the sample length depends on the selected chord
@@ -386,13 +388,13 @@ export function songsView() {
     const sampleLabel = () => {
       const [from, to] = sampleRange();
       const n = to - from;
-      return `▶ Play sample (${n} chord${n === 1 ? '' : 's'}, about ${seconds(n)} s)`;
+      return `▶ ${settings.sampleLoop ? 'Loop sample' : 'Play sample'} (${n} chord${n === 1 ? '' : 's'}, about ${seconds(n)} s${settings.sampleLoop ? ' each time round' : ''})`;
     };
 
     const flash = pulse => dots.querySelectorAll('.pulse').forEach((d, i) => d.classList.toggle('on', i === pulse));
     const labelButtons = () => {
       metroBtn.textContent = running === 'metronome' ? '■ Stop metronome' : '▶ Metronome';
-      sampleBtn.textContent = running === 'sample' ? '■ Stop sample' : sampleLabel();
+      sampleBtn.textContent = running === 'sample' ? (settings.sampleLoop ? '■ Stop loop' : '■ Stop sample') : sampleLabel();
     };
     const halt = () => {
       engine?.stop();
@@ -436,10 +438,11 @@ export function songsView() {
         everyPulse: practice.everyPulse,
         countIn: practice.countIn,
         metronome: practice.clicks,
-        onBar: k => {
+        loop: Boolean(settings.sampleLoop),
+        onBar: (k, pass) => {
           go(from + k, true, true);
           const section = sectionAt(from + k);
-          status.textContent = `Bar ${k + 1} of ${bars.length}${section ? ` · ${section}` : ''}: ${p.chords[from + k].symbol}`;
+          status.textContent = `${settings.sampleLoop ? `Round ${pass + 1} · ` : ''}Bar ${k + 1} of ${bars.length}${section ? ` · ${section}` : ''}: ${p.chords[from + k].symbol}`;
         },
         onPulse: (pulse, isCount) => {
           flash(pulse);
@@ -488,7 +491,9 @@ export function songsView() {
         tempoRange,
         h('button', { type: 'button', class: 'btn small icon', 'aria-label': 'Faster', onclick: () => setTempo(tempo + 1) }, '+'),
         tempoLabel,
-        h('button', { type: 'button', class: 'btn small', onclick: () => setTempo(feel.bpm) }, 'Song tempo')),
+        h('button', { type: 'button', class: 'btn small', onclick: () => setTempo(feel.bpm) }, 'Song tempo'),
+        h('button', { type: 'button', class: 'btn small', 'aria-label': 'Half speed', title: 'Half speed (for charts that count in double time)', onclick: () => setTempo(tempo / 2) }, '½×'),
+        h('button', { type: 'button', class: 'btn small', 'aria-label': 'Double speed', title: 'Double speed', onclick: () => setTempo(tempo * 2) }, '2×')),
       dots,
       status,
       h('div', { class: 'tempo-row' },
@@ -502,7 +507,15 @@ export function songsView() {
       h('div', { class: 'settings-row' },
         toggle('Count every strum', practice.everyPulse, v => { practice.everyPulse = v; }),
         toggle('Count-in bar before the sample', practice.countIn, v => { practice.countIn = v; }),
-        toggle('Click during the sample', practice.clicks, v => { practice.clicks = v; })),
+        toggle('Click during the sample', practice.clicks, v => { practice.clicks = v; }),
+        toggle('Loop the sample (repeat until you press Stop)', Boolean(settings.sampleLoop), v => {
+          settings.sampleLoop = v;
+          saveSettings();
+          const wasPlaying = running === 'sample';
+          if (wasPlaying) halt(); // start again with the new setting
+          labelButtons();
+          if (wasPlaying) toggleSample();
+        })),
       h('p', { class: 'muted small' }, 'A chord sheet doesn’t say how long each chord lasts, so the sample gives every chord one bar. “This section” and “From here” start from the chord you have selected. The metronome and sample use your tempo; press Stop to end them.'));
     metroBtn.onclick = toggleMetronome;
     sampleBtn.onclick = toggleSample;
@@ -522,8 +535,8 @@ export function songsView() {
           h('button', { type: 'button', class: 'btn primary', onclick: playCurrent }, '▶ Play'),
           h('button', { type: 'button', class: 'btn', 'aria-label': 'Next chord', onclick: () => go(idx + 1, true) }, 'Next ▶'))),
       h('p', { class: 'muted small tip' }, tip),
-      chipsEl,
-      practiceCard,
+      // The chord list and the Practice card (Best fit, tempo, metronome, sample) sit side by side on a wide screen.
+      h('div', { class: 'player-columns' }, chipsEl, practiceCard),
       h('div', { class: 'settings-row' },
         toggle('Smooth hand movement (inversions)', settings.smooth, v => {
           settings.smooth = v;
@@ -533,7 +546,8 @@ export function songsView() {
         }),
         toggle('Show next chord (dashed)', settings.ghost, v => { settings.ghost = v; saveSettings(); update(); }),
         toggle('Play sound when chord changes', settings.soundOnChange, v => { settings.soundOnChange = v; saveSettings(); }),
-        toggle('Name every key', settings.showAll, v => { settings.showAll = v; saveSettings(); update(); })),
+        toggle('Name every key', settings.showAll, v => { settings.showAll = v; saveSettings(); update(); }),
+        toggle('Finger numbers', settings.fingers, v => { settings.fingers = v; saveSettings(); update(); })),
       p.unknown.length > 0 && h('p', { class: 'warn' }, `Skipped (couldn't read): ${p.unknown.join(', ')}`));
 
     refresh = () => {

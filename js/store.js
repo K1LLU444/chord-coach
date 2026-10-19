@@ -22,8 +22,10 @@ export function save(key, value) {
 export const settings = Object.assign({
   tab: 'chords',
   showAll: false,
+  fingers: true,
   style: 'bass',
   sampleRange: 'section',
+  sampleLoop: false,
   sheetSong: '',
   sheetMode: 'cheat',
   sheetStyle: 'bass',

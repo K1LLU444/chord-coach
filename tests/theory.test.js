@@ -57,7 +57,7 @@ test('parses many ways of writing chords', () => {
   };
   for (const [input, symbol] of Object.entries(cases)) assert.equal(parseChord(input)?.symbol, symbol, input);
   assert.equal(parseChord('Cmaj7#11').symbol, 'Cmaj7');
-  assert.equal(parseChord('C13').symbol, 'C7');
+  assert.equal(parseChord('C13').symbol, 'C13');
   for (const word of ['Ahead', 'Bed', 'Go', 'Do', 'Cause', 'Email', 'hello']) assert.equal(parseChord(word, { strict: true }), null, word);
 });
 
@@ -139,8 +139,7 @@ test('left hand chord: the right-hand chord one octave lower, root lowest', () =
       const notes = lhChord(chord);
       assert.equal(notes[0] % 12, chord.rootPc, chord.symbol + ': the root is the lowest note');
       assert.ok(notes[0] >= 48 && notes[0] <= 59, chord.symbol + ': the root sits between C3 and B3');
-      const wide = Math.max(...chord.type.intervals) >= 12; // 9th chords: the 9th is folded down an octave
-      if (!wide) assert.deepEqual(notes.map(m => m + 12), rhVoicing(chord, 0, 60), chord.symbol + ': exactly one octave below the right hand');
+      assert.deepEqual(notes.map(m => m + 12), rhVoicing(chord, 0, 60), chord.symbol + ': exactly one octave below the right hand');
       assert.ok(notes.every(m => m - notes[0] < 12), chord.symbol + ': every note within an octave of the root, so it stays clear of the right hand');
       assert.deepEqual([...new Set(notes.map(m => m % 12))].sort((a, b) => a - b), [...chord.pcs].sort((a, b) => a - b), chord.symbol);
     }
@@ -184,4 +183,45 @@ test('strum style: bass on the count, the whole chord struck every count', () =>
   assert.equal(gradeMarks(C, marks([48, 55], [64, 67, 72]), 'strum').ok, true, 'any octave, any inversion');
   assert.equal(gradeMarks(C, marks([36, 43, 48], [60, 64, 67]), 'strum').ok, false, 'the octave belongs to the bass style');
   assert.equal(gradeMarks(C, marks([43, 48], [60, 64, 67]), 'strum').ok, false, 'the 5th must sit above the root, not below it');
+});
+
+test('minor-flat-five chords (written Bmb5) are diminished triads, not plain minor', () => {
+  const c = parseChord('Bmb5/A');
+  assert.equal(c.type.id, 'dim');
+  assert.deepEqual(c.notes, ['B', 'D', 'F']);
+  assert.equal(c.bass, 'A');
+  assert.equal(c.original, null, 'no longer simplified');
+  assert.equal(parseChord('Bm7b5').type.id, 'm7b5', 'the 4-note version is unchanged');
+});
+
+test('13th and 9sus4 chords are played as written, not simplified', () => {
+  const e13 = parseChord('E13');
+  assert.deepEqual(e13.notes, ['E', 'G#', 'B', 'D', 'C#']);
+  assert.equal(e13.original, null);
+  const e9sus4 = parseChord('E9sus4');
+  assert.deepEqual(e9sus4.notes, ['E', 'A', 'B', 'D', 'F#'], 'the 4th (A) replaces the 3rd (G#)');
+  assert.equal(e9sus4.original, null);
+  assert.equal(parseChord('C13#11').symbol, 'C13', 'extra alterations still simplify to the nearest known chord');
+});
+
+test('Ultimate Guitar: notes before the first heading are not music', async () => {
+  const { ugToText } = await import('../js/theory.js');
+  const content = 'Main progression: [ch]Am[/ch] to [ch]F[/ch] and back again\r\n[ch]C[/ch] [ch]G[/ch]\r\n[Intro]\r\n[ch]Am[/ch] [ch]F[/ch]\r\nSome words after the heading [ch]C[/ch] stay as they were';
+  assert.equal(ugToText(content), 'C G\n\n[Intro]\nAm F\nC', 'the mixed prose line is dropped; chord-only lines and everything after a heading are kept');
+});
+
+test('every chord fits in one hand: no wider than 11 semitones, in every inversion', async () => {
+  const { CHORD_TYPES, makeChord, ROOTS } = await import('../js/theory.js');
+  for (const type of CHORD_TYPES) {
+    for (const root of ROOTS) {
+      const chord = makeChord(root, type);
+      for (let k = 0; k < chord.pcs.length; k++) {
+        const v = rhVoicing(chord, k);
+        assert.ok(v.at(-1) - v[0] <= 11, `${chord.symbol} inversion ${k} spans ${v.at(-1) - v[0]} semitones`);
+        assert.deepEqual([...new Set(v.map(m => m % 12))].sort((a, b) => a - b), [...chord.pcs].sort((a, b) => a - b), `${chord.symbol} keeps all its notes`);
+      }
+    }
+  }
+  const e13 = parseChord('E13');
+  assert.deepEqual(rhVoicing(e13, 0).map(m => noteName(m)), ['E', 'G#', 'B', 'C#', 'D'], 'E13: the 13th (C#) sits below the 7th (D)');
 });

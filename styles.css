@@ -657,3 +657,23 @@ body[data-tab="sheets"] .style-bar { display: none; }
 .app-foot { max-width: 1100px; margin: 0 auto; padding: 4px max(16px, env(safe-area-inset-left)) 12px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 12px; font-size: 12px; color: var(--muted); }
 .link-btn { appearance: none; border: 0; background: none; color: var(--accent); font: 600 12px/1.2 inherit; cursor: pointer; padding: 6px 4px; text-decoration: underline; }
 @media print { .app-foot { display: none !important; } }
+
+.update-banner { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 600; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25); max-width: calc(100vw - 24px); }
+@media (min-width: 900px) { .update-banner { bottom: 24px; } }
+@media print { .update-banner { display: none !important; } }
+
+/* Finger numbers on the keys (1 thumb … 5 little finger) */
+.key .fing-bg { fill: #fff; stroke-width: 2.2; pointer-events: none; }
+.key.lh .fing-bg { stroke: var(--lh); }
+.key.rh .fing-bg { stroke: var(--rh); }
+.key.marked text.fing { font: 800 15px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: middle; pointer-events: none; }
+.key.black.marked text.fing { font-size: 13px; }
+.key.marked.lh text.fing { fill: var(--lh); }
+.key.marked.rh text.fing { fill: var(--rh); }
+
+/* Song player: chords on the left, Best fit and practice on the right (wide screens only) */
+.player-columns { display: grid; gap: 12px; min-width: 0; }
+.player-columns > * { min-width: 0; }
+@media (min-width: 900px) {
+  .player-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+}

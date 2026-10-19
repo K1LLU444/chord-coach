@@ -97,3 +97,16 @@ export function cleanFeel(feel) {
   const hits = feel.hits.map(h => ({ accent: Boolean(h?.accent), soft: Boolean(h?.soft), rest: Boolean(h?.rest) }));
   return hits.every(h => h.rest) ? null : { bpm, pulses, group, hits };
 }
+
+/**
+ * Which bar of a sample is playing at timeline position k (0, 1, 2 …): `lead` count-in bars first, then the
+ * `count` bars of the sample, and, when `loop` is on, the same bars again and again.
+ * Returns { countIn: true } for a count-in bar, { countIn: false, index, pass } for a sample bar
+ * (index within the sample, pass = 0 for the first time round), or null when a sample that isn't looping has finished.
+ */
+export function barAtPosition(k, { lead = 0, count, loop = false }) {
+  if (k < lead) return { countIn: true };
+  const n = k - lead;
+  if (!loop && n >= count) return null;
+  return { countIn: false, index: n % count, pass: Math.floor(n / count) };
+}

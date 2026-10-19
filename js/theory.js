@@ -25,7 +25,7 @@ export const CHORD_TYPES = [
   { id: 'm7', suffix: 'm7', name: 'Minor 7th', intervals: [0, 3, 7, 10], degrees: [1, 3, 5, 7], core: true, aliases: ['m7', 'min7', 'minor7', '-7'] },
   { id: 'sus2', suffix: 'sus2', name: 'Suspended 2nd', intervals: [0, 2, 7], degrees: [1, 2, 5], core: true, aliases: ['sus2'] },
   { id: 'sus4', suffix: 'sus4', name: 'Suspended 4th', intervals: [0, 5, 7], degrees: [1, 4, 5], core: true, aliases: ['sus4', 'sus'] },
-  { id: 'dim', suffix: 'dim', name: 'Diminished', intervals: [0, 3, 6], degrees: [1, 3, 5], core: true, aliases: ['dim', '°', 'diminished'] },
+  { id: 'dim', suffix: 'dim', name: 'Diminished', intervals: [0, 3, 6], degrees: [1, 3, 5], core: true, aliases: ['dim', '°', 'diminished', 'mb5', 'm-5'] }, // "Bmb5" is a B diminished triad (B D F)
   { id: 'aug', suffix: 'aug', name: 'Augmented', intervals: [0, 4, 8], degrees: [1, 3, 5], core: true, aliases: ['aug', '+', '+5', '#5', 'augmented'] },
   { id: '6', suffix: '6', name: 'Major 6th', intervals: [0, 4, 7, 9], degrees: [1, 3, 5, 6], aliases: ['6', 'maj6', 'M6'] },
   { id: 'm6', suffix: 'm6', name: 'Minor 6th', intervals: [0, 3, 7, 9], degrees: [1, 3, 5, 6], aliases: ['m6', 'min6'] },
@@ -35,6 +35,8 @@ export const CHORD_TYPES = [
   { id: 'maj9', suffix: 'maj9', name: 'Major 9th', intervals: [0, 4, 7, 11, 14], degrees: [1, 3, 5, 7, 9], aliases: ['maj9', 'M9'] },
   { id: 'm9', suffix: 'm9', name: 'Minor 9th', intervals: [0, 3, 7, 10, 14], degrees: [1, 3, 5, 7, 9], aliases: ['m9', 'min9'] },
   { id: '7sus4', suffix: '7sus4', name: 'Dominant 7th sus4', intervals: [0, 5, 7, 10], degrees: [1, 4, 5, 7], aliases: ['7sus4', '7sus', 'sus47'] },
+  { id: '9sus4', suffix: '9sus4', name: 'Dominant 9th sus4', intervals: [0, 5, 7, 10, 14], degrees: [1, 4, 5, 7, 9], aliases: ['9sus4', '9sus'] },
+  { id: '13', suffix: '13', name: 'Dominant 13th', intervals: [0, 4, 7, 10, 21], degrees: [1, 3, 5, 7, 13], aliases: ['13'] },
   { id: 'dim7', suffix: 'dim7', name: 'Diminished 7th', intervals: [0, 3, 6, 9], degrees: [1, 3, 5, 7], aliases: ['dim7', '°7'] },
   { id: 'm7b5', suffix: 'm7b5', name: 'Half-diminished', intervals: [0, 3, 6, 10], degrees: [1, 3, 5, 7], aliases: ['m7b5', 'm7-5', 'min7b5', 'ø', 'ø7'] },
   { id: 'mMaj7', suffix: 'mMaj7', name: 'Minor-major 7th', intervals: [0, 3, 7, 11], degrees: [1, 3, 5, 7], aliases: ['mMaj7', 'mM7', 'minmaj7'] },
@@ -166,7 +168,11 @@ function nextAtOrAbove(pc, min) {
   return min + (((pc - min) % 12) + 12) % 12;
 }
 
-/** Right-hand notes for an inversion (0 = root position), stacked upward from `low`. */
+/**
+ * Right-hand notes for an inversion (0 = root position), stacked upward from `low`.
+ * The whole chord stays within one hand's reach: a note 12 or more semitones above the lowest note (the 9th of a
+ * 9th chord, the 13th of a 13th chord) drops an octave, so no chord is wider than 11 semitones.
+ */
 export function rhVoicing(chord, inversion = 0, low = RH_RANGE.from) {
   const n = chord.pcs.length;
   const k = ((inversion % n) + n) % n;
@@ -178,7 +184,7 @@ export function rhVoicing(chord, inversion = 0, low = RH_RANGE.from) {
     out.push(note);
     min = note + 1;
   }
-  return out;
+  return out.map(m => (m - out[0] >= 12 ? m - 12 : m)).sort((a, b) => a - b);
 }
 
 /** Left hand: root → 5th → octave (for slash chords: bass note + its octave). */
@@ -305,15 +311,21 @@ export function ugToText(content, capo = 0) {
     const c = capo ? parseChord(sym, { strict: true }) : null;
     return c ? transposeChord(c, capo).symbol : sym;
   };
+  let seenHeading = false;
   for (const line of String(content || '').replace(/\[\/?tab\]/g, '').split(/\r?\n/)) {
     const header = line.match(/^\s*\[([^\]\/]+)\]\s*$/);
     if (header && header[1] !== 'ch') {
+      seenHeading = true;
       dropEmptySection(); // previous section had no chords (e.g. only guitar tab)
       if (out.length) out.push('');
       out.push(`[${header[1].trim()}]`);
       continue;
     }
     const chords = [...line.matchAll(/\[ch\](.*?)\[\/ch\]/g)].map(m => m[1].trim()).filter(Boolean);
+    // Before the first section heading, a line that mixes chords with ordinary words is a note about the song
+    // ("main progression: …"), not music, so it is left out. Chord-only lines are kept.
+    const words = line.replace(/\[ch\].*?\[\/ch\]/g, '').replace(/\[\/?ch\]/g, '').trim();
+    if (!seenHeading && words.length > 12) continue;
     if (chords.length) out.push(chords.map(fix).join(' '));
   }
   dropEmptySection();
@@ -345,12 +357,11 @@ export const STYLES = [
 /**
  * Left hand chord: the same chord the right hand plays (the root, then +4 or +3, then the rest, counted upward),
  * one octave lower, so the root is the lowest note. The root sits between C3 and B3.
- * A note more than an octave above the root (the 9th of a 9th chord) drops an octave, so the left hand
- * never reaches up into the right hand's notes. Slash chords add their bass note lower down.
+ * (The 9th of a 9th chord and the 13th of a 13th chord drop an octave, as in the right hand.)
+ * Slash chords add their bass note lower down.
  */
 export function lhChord(chord) {
-  const stacked = rhVoicing(chord, 0, 48);
-  const notes = stacked.map(m => (m - stacked[0] >= 12 ? m - 12 : m)).sort((a, b) => a - b);
+  const notes = rhVoicing(chord, 0, 48); // already kept within one hand's reach
   if (chord.bass) notes.unshift(nextAtOrAbove(chord.bassPc, LH_RANGE.from));
   return notes;
 }

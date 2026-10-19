@@ -6,6 +6,7 @@ import { renderBoard, renderPanel, keyboardSVG } from '../keyboard.js';
 import { sheetElement } from '../sheet.js';
 import { playNote, playBoth, playSequence, playPlan } from '../audio.js';
 import { currentStyle, styleInfo } from '../style.js';
+import { fingerPlan } from '../fingers.js';
 import { settings, saveSettings, load, save } from '../store.js';
 
 const POOLS = {
@@ -82,7 +83,7 @@ export function quizView() {
   const answerBoard = () => {
     const el = h('div', { class: 'board' });
     const plan = planNow();
-    renderBoard(el, { lh: plan.lh.notes, rh: plan.rh.notes, label: noteLabeler(card), showAll: settings.showAll, onKey: m => playNote(m), overview: false });
+    renderBoard(el, { lh: plan.lh.notes, rh: plan.rh.notes, label: noteLabeler(card), showAll: settings.showAll, onKey: m => playNote(m), overview: false, fingers: settings.fingers ? fingerPlan(card, plan).map : undefined });
     return el;
   };
   const reveal = () => settings.revealSound && playPlan(planNow());
@@ -129,7 +130,8 @@ export function quizView() {
     const rh = plan.rh.notes;
     const kb = h('div', { class: 'board' });
     const feedback = h('div', { class: 'feedback' });
-    const draw = label => renderBoard(kb, { lh, rh, label, onKey: m => playNote(m), overview: false });
+    // Finger numbers would give the shape away, so they only appear once you have answered.
+    const draw = (label, withFingers = false) => renderBoard(kb, { lh, rh, label, onKey: m => playNote(m), overview: false, fingers: withFingers && settings.fingers ? fingerPlan(card, plan).map : undefined });
 
     const pool = cards().filter(c => c.id !== card.id);
     const close = pool.filter(c => c.rootPc === card.rootPc || c.type === card.type);
@@ -145,7 +147,7 @@ export function quizView() {
           if (options[i] === card) b.classList.add('good-btn');
           else if (options[i] === o) b.classList.add('bad-btn');
         });
-        draw(noteLabeler(card));
+        draw(noteLabeler(card), true);
         reveal();
         feedback.replaceChildren(
           h('p', { class: ok ? 'good' : 'bad' }, ok ? '✓ Correct!' : `It's ${card.symbol} (${card.notes.join(' + ')}).`),
@@ -202,8 +204,8 @@ export function quizView() {
         onclick: () => { brush = id; drawBrushes(); slideTo(id); },
       }, h('span', { class: `dot ${id}` }), text)));
 
-    const drawKeys = (shown, label, onKey) => {
-      renderPanel(scroller, { ...range, marks: shown, label, showAll: settings.showAll, onKey });
+    const drawKeys = (shown, label, onKey, fingers = null) => {
+      renderPanel(scroller, { ...range, marks: shown, label, showAll: settings.showAll, onKey, fingers });
       overview.replaceChildren(
         keyboardSVG({ ...range, marks: shown, mini: true }),
         h('p', { class: 'muted small' }, 'Whole keyboard: C2 to B5. Slide the big keyboard sideways to reach the other keys.'));
@@ -231,7 +233,7 @@ export function quizView() {
       grade(ok, hinted);
       reveal();
       const answer = new Map([...lhGoal.map(m => [m, 'lh']), ...rhGoal.map(m => [m, 'rh'])]);
-      drawKeys(answer, noteLabeler(card), m => playNote(m));
+      drawKeys(answer, noteLabeler(card), m => playNote(m), settings.fingers ? fingerPlan(card, plan).map : null);
       showSheet();
       brushes.hidden = true;
       message.replaceChildren(h('p', { class: ok ? 'good' : 'bad' },

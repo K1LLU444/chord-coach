@@ -5,7 +5,8 @@ Runs in the browser on Mac and iPhone (add it to the home screen to use it like 
 
 - **Playing style**: a switch under the header picks how the hands share a chord: *Bass + chord* (left hand root → 5th → octave, right hand chord), *Chord + broken notes* (left hand chord, right hand notes one at a time) or *Strum* (right hand strikes the chord on every count, left hand adds the bass). Every tab follows it.
 - **Sheets** tab: printable A4 pages for a music stand. *Cheat sheets* (5 pages: reading any chord, the three styles with fingerings, all major/minor chords, 7th chords, and a page for one of your songs) and *Music sheets* (every common chord on a staff, left hand blue and right hand orange, one playing style per page set; optional rarer chords). Press Print / Save as PDF. Ready-made PDFs are kept in `cheat-sheets/` on the Mac (not uploaded).
-- **Practice** (Songs tab): a "Best fit" suggestion (style, tempo, how to count, easier chords to start with), a metronome and a sample of the song (this section, from the selected chord, or the whole song) played in the chosen style. Songs sent from Ultimate Guitar bring their own strumming pattern and tempo (`js/rhythm.js`, `js/analyze.js`, `js/player.js`).
+- **Practice** (Songs tab): a "Best fit" suggestion (style, tempo, how to count, easier chords to start with), a metronome and a sample of the song (this section, from the selected chord, or the whole song) played in the chosen style, optionally on a loop (repeats until you press Stop; the count-in plays once). Songs sent from Ultimate Guitar bring their own strumming pattern and tempo (`js/rhythm.js`, `js/analyze.js`, `js/player.js`).
+- **Finger numbers**: every key you press shows 1–5 (1 thumb … 5 little finger) for both hands in every style, on the Chords tab, the song player and the quiz answers (`js/fingers.js`, the common beginner fingerings). A "Finger numbers" switch turns them off.
 - **Chords**: search (`Am`, `F#m7`, `Bb major`, `C/E`…) or pick root + type. Shows the left hand
   (root → 5th → octave) in blue and the right hand chord in orange, with inversions and sound.
 - **Songs**: paste chords (plain, bars, `[Chorus]` sections, chords-over-lyrics, ChordPro). Step through them:
@@ -43,10 +44,12 @@ To try it on the iPhone on the same Wi-Fi, open `http://<your-mac-ip>:8000`
 
 ### If a device shows an old version
 
-The app fetches the newest files first whenever it is online (`sw.js`), and only uses its saved copy when offline.
-The footer shows `Version xxxxxxx` and a **Refresh app** button (clears the saved copy; songs and progress are kept).
-A device stuck on an old copy can open `reset.html` (for example `https://k1llu444.github.io/chord-coach/reset.html`),
-which clears the saved copy and opens the app again.
+All files of a version are saved together when that version installs (`sw.js`), and the app opens from that saved set:
+instant, offline-friendly, never a mix of versions. The browser checks for a new `sw.js` whenever the app opens or comes
+back to the screen; when one arrives the app shows "A new version is ready. Reload". The footer shows `Version xxxxxxx`
+and a **Refresh app** button (clears the saved copy; songs and progress are kept). A device that is stuck on an old copy
+can open `reset.html` (for example `https://k1llu444.github.io/chord-coach/reset.html`). If a device cannot reach
+the website at all (some company networks block `github.io`), it keeps running its saved version.
 
 ### Updates and versions (automatic)
 

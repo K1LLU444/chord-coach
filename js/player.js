@@ -2,7 +2,7 @@
 // Sounds are scheduled on the audio clock a little ahead of time; the callbacks (for the screen) use ordinary timers.
 
 import { click, createSession, playEvents } from './audio.js';
-import { barEvents, clickLevel, pulseSeconds } from './rhythm.js';
+import { barAtPosition, barEvents, clickLevel, pulseSeconds } from './rhythm.js';
 
 const LEAD = 0.12; // seconds before the first sound, so nothing is scheduled in the past
 const AHEAD = 2.5; // how far ahead (in seconds) bars are lined up; keeps long songs light for the phone
@@ -11,15 +11,16 @@ const clock = () => performance.now() / 1000;
 /**
  * Play `bars` one after another, one bar each: [{ plan }] (plans come from handPlan).
  * Bars are lined up a couple of seconds at a time, so a whole song doesn't create thousands of sounds at once.
- * onBar(i) fires as bar i starts, onPulse(pulse, countIn) on every count, onEnd() when finished.
+ * With loop on, the bars start over when they finish (the count-in plays only once) until you call stop().
+ * onBar(i, pass) fires as bar i starts (pass counts the times round, from 0), onPulse(pulse, countIn) on every count,
+ * onEnd() when a sample that isn't looping finishes.
  * Returns { stop }.
  */
-export function playSample({ bars, feel, bpm, metronome = true, everyPulse = true, countIn = true, onBar, onPulse, onEnd }) {
+export function playSample({ bars, feel, bpm, metronome = true, everyPulse = true, countIn = true, loop = false, onBar, onPulse, onEnd }) {
   const session = createSession();
   const step = pulseSeconds(feel, bpm);
   const barLength = feel.pulses * step;
-  const lead = countIn ? 1 : 0;
-  const total = lead + bars.length;
+  const position = { lead: countIn ? 1 : 0, count: bars.length, loop };
   const start = clock() + LEAD;
   const timers = new Set();
   const later = (seconds, fn) => {
@@ -28,11 +29,12 @@ export function playSample({ bars, feel, bpm, metronome = true, everyPulse = tru
   };
 
   const scheduleBar = k => {
-    const isCount = k < lead;
+    const bar = barAtPosition(k, position);
+    const isCount = bar.countIn;
     const delay = start + k * barLength - clock(); // seconds from now until this bar begins
     if (!isCount) {
-      later(delay, () => onBar?.(k - lead));
-      playEvents(barEvents(bars[k - lead].plan, feel), step, Math.max(0, delay), session.out);
+      later(delay, () => onBar?.(bar.index, bar.pass));
+      playEvents(barEvents(bars[bar.index].plan, feel), step, Math.max(0, delay), session.out);
     }
     for (let p = 0; p < feel.pulses; p++) {
       const level = clickLevel(feel, p, everyPulse);
@@ -44,14 +46,16 @@ export function playSample({ bars, feel, bpm, metronome = true, everyPulse = tru
 
   let next = 0;
   const pump = () => {
-    while (next < total && start + next * barLength < clock() + AHEAD) scheduleBar(next++);
+    while (barAtPosition(next, position) && start + next * barLength < clock() + AHEAD) scheduleBar(next++);
   };
   pump();
   const refill = setInterval(pump, 250);
-  later(start + total * barLength + 0.4 - clock(), () => {
-    clearInterval(refill);
-    onEnd?.();
-  });
+  if (!loop) {
+    later(start + (position.lead + bars.length) * barLength + 0.4 - clock(), () => {
+      clearInterval(refill);
+      onEnd?.();
+    });
+  }
 
   return {
     stop() {

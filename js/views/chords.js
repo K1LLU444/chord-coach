@@ -7,6 +7,7 @@ import {
 import { renderBoard } from '../keyboard.js';
 import { playNote, playHand, playPlan } from '../audio.js';
 import { currentStyle, handText } from '../style.js';
+import { fingerPlan, withFingers } from '../fingers.js';
 import { settings, saveSettings } from '../store.js';
 
 // Same order as the original chord table.
@@ -77,6 +78,7 @@ export function chordsView() {
     const plan = handPlan(chord, currentStyle(), { inversion });
     const lh = plan.lh.notes;
     const rh = plan.rh.notes;
+    const fp = fingerPlan(chord, plan);
     const label = noteLabeler(chord);
     const board = h('div', { class: 'board' });
     const hints = enharmonicHints(chord);
@@ -89,8 +91,8 @@ export function chordsView() {
           h('div', { class: 'long' }, chord.name),
           h('div', { class: 'muted' }, 'Notes: ', chord.notes.join(' · ')))),
       h('div', { class: 'hands' },
-        hand('lh', 'Left hand', handText(plan.lh, label), () => playHand(plan.lh), plan.lh.note),
-        hand('rh', 'Right hand', handText(plan.rh, label), () => playHand(plan.rh), plan.rh.note)),
+        hand('lh', 'Left hand', handText(plan.lh, label), () => playHand(plan.lh), withFingers(plan.lh.note, fp.lh, settings.fingers)),
+        hand('rh', 'Right hand', handText(plan.rh, label), () => playHand(plan.rh), withFingers(plan.rh.note, fp.rh, settings.fingers))),
       h('div', { class: 'row wrap' },
         h('button', { type: 'button', class: 'btn primary', onclick: () => playPlan(plan) }, '▶ Play both hands'),
         chord.pcs.length > 1 && h('div', { class: 'inv' },
@@ -101,10 +103,11 @@ export function chordsView() {
       board,
       h('div', { class: 'row wrap between' },
         toggle('Name every key', settings.showAll, v => { settings.showAll = v; saveSettings(); renderResult(); }),
+        toggle('Finger numbers', settings.fingers, v => { settings.fingers = v; saveSettings(); renderResult(); }),
         h('span', { class: 'muted small' }, 'Tap any key to hear it')),
       hints.length > 0 && h('p', { class: 'hint-note' }, '💡 ', hints.join('. '), '.'),
     );
-    renderBoard(board, { lh, rh, label, showAll: settings.showAll, onKey: m => playNote(m) });
+    renderBoard(board, { lh, rh, label, showAll: settings.showAll, onKey: m => playNote(m), fingers: settings.fingers ? fp.map : undefined });
   }
 
   function cheatSheet() {
