@@ -9,14 +9,15 @@ const AHEAD = 2.5; // how far ahead (in seconds) bars are lined up; keeps long s
 const clock = () => performance.now() / 1000;
 
 /**
- * Play `bars` one after another, one bar each: [{ plan }] (plans come from handPlan).
+ * Play `bars` one after another, one bar each: [{ plan, tune?, bass? }] (plans come from handPlan; a tune is that bar's melody, a bass is its own left-hand line).
  * Bars are lined up a couple of seconds at a time, so a whole song doesn't create thousands of sounds at once.
  * With loop on, the bars start over when they finish (the count-in plays only once) until you call stop().
  * onBar(i, pass) fires as bar i starts (pass counts the times round, from 0), onPulse(pulse, countIn) on every count,
  * onEnd() when a sample that isn't looping finishes.
- * Returns { stop }.
+ * Returns { stop, pulse } where pulse() is how far through the sample we are, counted in pulses from its first bar
+ * (negative during the count-in); the falling-notes view follows it.
  */
-export function playSample({ bars, feel, bpm, metronome = true, everyPulse = true, countIn = true, loop = false, onBar, onPulse, onEnd }) {
+export function playSample({ bars, feel, bpm, metronome = true, everyPulse = true, countIn = true, loop = false, hands = 'both', onBar, onPulse, onEnd }) {
   const session = createSession();
   const step = pulseSeconds(feel, bpm);
   const barLength = feel.pulses * step;
@@ -34,7 +35,7 @@ export function playSample({ bars, feel, bpm, metronome = true, everyPulse = tru
     const delay = start + k * barLength - clock(); // seconds from now until this bar begins
     if (!isCount) {
       later(delay, () => onBar?.(bar.index, bar.pass));
-      playEvents(barEvents(bars[bar.index].plan, feel), step, Math.max(0, delay), session.out);
+      playEvents(barEvents(bars[bar.index].plan, feel, bars[bar.index].tune, bars[bar.index].bass).filter(e => hands === 'both' || e.hand === hands), step, Math.max(0, delay), session.out);
     }
     for (let p = 0; p < feel.pulses; p++) {
       const level = clickLevel(feel, p, everyPulse);
@@ -58,6 +59,7 @@ export function playSample({ bars, feel, bpm, metronome = true, everyPulse = tru
   }
 
   return {
+    pulse: () => (clock() - start) / step - position.lead * feel.pulses,
     stop() {
       clearInterval(refill);
       timers.forEach(clearTimeout);

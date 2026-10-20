@@ -1,6 +1,6 @@
 // A small Web Audio piano-ish synth. No samples to download, so it works offline.
 
-import { barEvents, pulseSeconds } from './rhythm.js';
+import { barEvents, eventSeconds, pulseSeconds } from './rhythm.js';
 
 let ctx = null;
 let out = null;
@@ -59,7 +59,7 @@ export function playNote(midi, delay = 0, dur = 1.8, velocity = 0.8, dest = null
   const env = c.createGain();
   env.gain.setValueAtTime(0.0001, t);
   env.gain.exponentialRampToValueAtTime(0.28 * velocity, t + 0.006);
-  env.gain.exponentialRampToValueAtTime(0.09 * velocity, t + 0.35);
+  if (dur > 0.45) env.gain.exponentialRampToValueAtTime(0.09 * velocity, t + 0.35); // short notes just fade away
   env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
   const lp = c.createBiquadFilter();
@@ -159,7 +159,7 @@ export function click(level = 1, delay = 0, dest = null) {
 export function playEvents(events, pulseSec, delay = 0, dest = null) {
   for (const e of events) {
     const at = delay + e.pulse * pulseSec;
-    const dur = e.hand === 'lh' ? Math.min(2.2, pulseSec * 4) : Math.min(1.6, pulseSec * 2.2);
-    e.notes.forEach((midi, i) => playNote(midi, at + i * 0.012, Math.max(0.5, dur), e.velocity, dest));
+    const dur = eventSeconds(e, pulseSec);
+    e.notes.forEach((midi, i) => playNote(midi, at + i * 0.012, dur, e.velocity, dest));
   }
 }

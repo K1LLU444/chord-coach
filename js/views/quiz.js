@@ -8,6 +8,7 @@ import { playNote, playBoth, playSequence, playPlan } from '../audio.js';
 import { currentStyle, styleInfo } from '../style.js';
 import { fingerPlan } from '../fingers.js';
 import { settings, saveSettings, load, save } from '../store.js';
+import { noteQuizView } from './note-quiz.js';
 
 const POOLS = {
   basic: { label: 'Major & minor', types: ['maj', 'min'] },
@@ -259,7 +260,9 @@ export function quizView() {
         ? 'Almost! The notes are right, but the blue chord (left hand) should sit lower than the orange notes (right hand).'
         : style === 'strum'
           ? 'Almost! The notes are right, but the left hand is the root with its 5th above it.'
-          : 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.';
+          : style === 'easy'
+            ? 'Almost! The notes are right, but the left hand is only the root, one key.'
+            : 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.';
       message.replaceChildren(h('p', { class: 'bad' },
         notesRight
           ? almost
@@ -280,6 +283,8 @@ export function quizView() {
       h('p', { class: 'muted small mark-hint' },
         style === 'broken'
           ? `Pick a colour, then tap keys. Blue = left hand: the whole chord (${lhGoal.length} keys), one octave lower than the right hand. Orange = right hand: the same ${card.pcs.length} notes, played one at a time.`
+          : style === 'easy'
+            ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the whole chord (${card.pcs.length} different notes).`
           : style === 'strum'
             ? `Pick a colour, then tap keys. Blue = left hand: 2 keys, the root and its 5th above it. Orange = right hand: the whole chord (${card.pcs.length} different notes), struck on every count.`
             : `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
@@ -377,7 +382,7 @@ export function quizView() {
         h('span', {}, h('i', { class: 'cell b5' }), 'mastered')));
   }
 
-  const el = h('div', { class: 'view' },
+  const chordQuiz = h('div', { class: 'chord-quiz' },
     h('div', { class: 'quiz-controls' },
       segmented(MODES, settings.quizMode, v => {
         settings.quizMode = v;
@@ -396,6 +401,15 @@ export function quizView() {
       }, 'Chords to practise'),
       toggle('Play the answer', settings.revealSound, v => { settings.revealSound = v; saveSettings(); })),
     stats, stage, mastery);
+
+  // Two kinds of quiz: chords (the cards above) and reading single notes on a staff.
+  const notes = noteQuizView();
+  const kind = () => (settings.quizKind === 'notes' ? 'notes' : 'chords');
+  const showKind = () => { chordQuiz.hidden = kind() !== 'chords'; notes.el.hidden = kind() !== 'notes'; };
+  const el = h('div', { class: 'view' },
+    segmented([['chords', 'Chords'], ['notes', 'Reading notes']], kind(), v => { settings.quizKind = v; saveSettings(); showKind(); }, 'Which quiz'),
+    chordQuiz, notes.el);
+  showKind();
 
   // The playing style is changed from the bar under the header; redraw the current card (the ear quiz doesn't depend on it).
   window.addEventListener('stylechange', () => card && settings.quizMode !== 'ear' && renderStage());

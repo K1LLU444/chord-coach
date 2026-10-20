@@ -8,7 +8,14 @@ import { currentStyle, handText } from '../style.js';
 import { fingerPlan, withFingers } from '../fingers.js';
 import { analyzeSong, countText } from '../analyze.js';
 import { playSample, startMetronome } from '../player.js';
-import { cleanFeel, feelFromStrumming } from '../rhythm.js';
+import { cleanFeel, cleanMelody, feelFromStrumming } from '../rhythm.js';
+import { buildTimeline, fallingView } from '../falling.js';
+import { fallStage } from './stage.js';
+import { practicePanel } from './practice-controls.js';
+import { clampRange, cleanHands, cleanSpeed, speedBpm } from '../practice.js';
+import { fingerBars } from '../fingering.js';
+import { isEmpty as tuneIsEmpty, hasBass, keyName, prefersFlats } from '../melody.js';
+import { tuneUI } from './tune.js';
 import { settings, saveSettings, loadSongs, saveSongs, uid } from '../store.js';
 import { hand } from './chords.js';
 import { ugPanel, openUgLink, cleanUrl, isUgUrl } from '../ultimate-guitar.js';
@@ -27,7 +34,7 @@ Chords written above lyrics work too: lyric lines are skipped.`;
 
 // Share links carry songs in the URL hash, so nothing is uploaded anywhere.
 function encodeSongs(list) {
-  const json = JSON.stringify(list.map(s => ({ t: s.title, c: s.text, src: s.source, n: s.note, m: s.meta })));
+  const json = JSON.stringify(list.map(s => ({ t: s.title, c: s.text, src: s.source, n: s.note, m: s.meta, me: s.melody })));
   return btoa(unescape(encodeURIComponent(json)));
 }
 
@@ -44,6 +51,8 @@ export function decodeSongs(data) {
       const feel = feelFromStrumming(s.strum) ?? cleanFeel(s.m?.feel);
       const key = String(s.key ?? s.m?.key ?? '').slice(0, 12);
       if (feel || key) song.meta = { ...(feel ? { feel } : {}), ...(key ? { key } : {}) };
+      const melody = cleanMelody(s.me);
+      if (melody) song.melody = melody;
       return song;
     });
 }
@@ -86,7 +95,7 @@ export function songsView() {
     stopPractice = null;
     keyHandler = null;
     refresh = null;
-    el.replaceChildren(next === 'list' ? listUI() : next === 'edit' ? editUI(song) : playerUI(song));
+    el.replaceChildren(next === 'list' ? listUI() : next === 'edit' ? editUI(song) : next === 'tune' ? tuneScreen(song) : playerUI(song));
     window.scrollTo(0, 0);
   }
 
@@ -237,6 +246,16 @@ export function songsView() {
       song && h('button', { type: 'button', class: 'btn danger', onclick: remove }, 'Delete song'));
   }
 
+  function tuneScreen(song) {
+    const ui = tuneUI(song, {
+      done: () => { persist(); show('play', song); },
+      save: persist,
+      reopen: () => show('tune', song),
+    });
+    stopPractice = ui.stop;
+    return ui.el;
+  }
+
   function playerUI(song) {
     const p = parseSong(song.text);
     const header = h('div', { class: 'row between player-head' },
@@ -244,6 +263,7 @@ export function songsView() {
       h('h2', { class: 'song-name' }, song.title),
       h('div', { class: 'row' },
         h('button', { type: 'button', class: 'btn small', onclick: () => share([song], song.title) }, 'Share'),
+        h('button', { type: 'button', class: 'btn small', onclick: () => show('tune', song) }, tuneIsEmpty(song.melody) ? '+ Tune' : 'Tune'),
         h('button', { type: 'button', class: 'btn small', onclick: () => show('edit', song) }, 'Edit')),
       (song.source || song.note) && h('div', { class: 'source-line' },
         song.note && h('span', { class: 'muted small' }, song.note),
@@ -288,6 +308,30 @@ export function songsView() {
     const planAt = i => handPlan(p.chords[i], currentStyle(), { rh: voicings[i].notes, feel });
     const playCurrent = () => playPlan(planAt(idx));
 
+    // The song's tune (if the player entered one) must be counted the same way as the song itself.
+    const tune = song.melody && song.melody.pulses === feel.pulses && song.melody.group === feel.group ? song.melody : null;
+    const tuneMismatch = !tune && !tuneIsEmpty(song.melody);
+    const useTune = () => Boolean(tune) && settings.useTune !== false;
+    const tuneBar = i => (useTune() && tune.bars[i]?.some(n => n.m) ? tune.bars[i] : null);
+    const bassBar = i => (useTune() && tune.bass?.[i]?.some(n => n.m) ? tune.bass[i] : null); // the song's own bass line, where one was entered
+    // suggested fingers for the tune and the bass line, worked out across the whole song so they carry from bar to bar
+    const longNote = feel.group === 1 ? 2 : 3;
+    const lineFingers = tune ? { rh: fingerBars(tune.bars, 'rh', feel.pulses, longNote), lh: tune.bass ? fingerBars(tune.bass, 'lh', feel.pulses, longNote) : null } : null;
+    const sounding = (notes, fingers) => (notes && fingers ? fingers.filter((_, j) => notes[j]?.m) : undefined);
+    const barFor = i => {
+      const plan = planAt(i);
+      return {
+        plan, tune: tuneBar(i), bass: bassBar(i), fingers: fingerPlan(p.chords[i], plan).map, label: p.chords[i].symbol,
+        tuneFingers: lineFingers ? sounding(tune.bars[i], lineFingers.rh[i]) : undefined,
+        bassFingers: lineFingers?.lh ? sounding(tune.bass[i], lineFingers.lh[i]) : undefined,
+      };
+    };
+
+    // Two ways to look at the keys: the two keyboards, or notes falling onto one keyboard.
+    const flats = prefersFlats(song.meta?.key);
+    const fall = fallingView();
+    const viewMode = () => (settings.playerView === 'fall' ? 'fall' : 'keys');
+
     function go(i, scroll = false, silent = false) {
       const next = Math.max(0, Math.min(p.chords.length - 1, i));
       if (next === idx && now.childElementCount) return;
@@ -303,6 +347,12 @@ export function songsView() {
       const plan = planAt(idx);
       const fp = fingerPlan(c, plan);
       const label = noteLabeler(c);
+      const tuneNotes = tuneBar(idx)?.filter(n => n.m).map(n => n.m);
+      const rhPlan = tuneNotes ? { notes: [...new Set(tuneNotes)], together: false, note: 'the tune for this bar, in order' } : plan.rh;
+      if (tuneNotes) for (const m of plan.rh.notes) fp.map.delete(m); // no finger numbers for the tune
+      const bassNotes = bassBar(idx)?.filter(n => n.m).map(n => n.m);
+      const lhPlan = bassNotes ? { notes: [...new Set(bassNotes)], together: false, note: 'the bass line for this bar, in order' } : plan.lh;
+      if (bassNotes) for (const m of plan.lh.notes) fp.map.delete(m);
       const nextChord = p.chords[idx + 1];
       const ghosts = settings.ghost && nextChord ? [...planAt(idx + 1).lh.notes, ...planAt(idx + 1).rh.notes] : [];
       const sub = [sectionAt(idx), settings.smooth && c.pcs.length > 1 ? inversionName(v.k) : null].filter(Boolean).join(' · ');
@@ -315,12 +365,13 @@ export function songsView() {
             sub && h('div', { class: 'muted small' }, sub)),
           h('div', { class: 'next' }, nextChord ? ['Next', h('strong', {}, nextChord.symbol)] : ['Last', h('strong', {}, '—')])),
         h('div', { class: 'hands compact' },
-          hand('lh', 'Left', handText(plan.lh, label), () => playHand(plan.lh), withFingers(plan.lh.note, fp.lh, settings.fingers)),
-          hand('rh', 'Right', handText(plan.rh, label), () => playHand(plan.rh), withFingers(plan.rh.note, fp.rh, settings.fingers))));
-      renderBoard(board, { lh: plan.lh.notes, rh: plan.rh.notes, ghosts, label, showAll: settings.showAll, onKey: m => playNote(m), overview: false, fingers: settings.fingers ? fp.map : undefined });
+          hand('lh', 'Left', bassNotes ? lhPlan.notes.map(m => keyName(m, flats)).join(' → ') : handText(lhPlan, label), () => playHand(lhPlan), bassNotes ? lhPlan.note : withFingers(plan.lh.note, fp.lh, settings.fingers)),
+          hand('rh', 'Right', tuneNotes ? rhPlan.notes.map(m => keyName(m, flats)).join(' → ') : handText(rhPlan, label), () => playHand(rhPlan), tuneNotes ? rhPlan.note : withFingers(plan.rh.note, fp.rh, settings.fingers))));
+      renderBoard(board, { lh: lhPlan.notes, rh: rhPlan.notes, ghosts, label, showAll: settings.showAll, onKey: m => playNote(m), overview: false, fingers: settings.fingers ? fp.map : undefined });
       counter.textContent = `${idx + 1} / ${p.chords.length}`;
       chipEls.forEach((b, i) => b.classList.toggle('active', i === idx));
       labelButtons?.(); // the sample length depends on the selected chord
+      drawFall?.();
     }
 
     // Swipe left/right on the keyboard to change chord.
@@ -358,6 +409,8 @@ export function songsView() {
     let running = null; // 'metronome' | 'sample' | null
     let engine = null;
     const practice = { everyPulse: true, countIn: true, clicks: true };
+    const prac = { speed: cleanSpeed(settings.practiceSpeed), hands: cleanHands(settings.practiceHands) };
+    const bpmNow = () => speedBpm(tempo, prac.speed); // the tempo with the speed percentage applied
 
     const suggestion = h('div', { class: 'suggestion' });
     const tempoLabel = h('span', { class: 'tempo-label' });
@@ -367,11 +420,16 @@ export function songsView() {
     const tempoRange = h('input', { type: 'range', min: 30, max: 180, step: 1, value: tempo, 'aria-label': 'Tempo in beats per minute', oninput: e => setTempo(+e.target.value) });
     const metroBtn = h('button', { type: 'button', class: 'btn' });
     const sampleBtn = h('button', { type: 'button', class: 'btn primary' });
+    const stagePlay = h('button', { type: 'button', class: 'btn primary' }); // the same button, inside the falling-notes frame
     // Which chords the sample plays: the section you are in, from the selected chord to the end, or everything.
-    const rangeMode = () => (['section', 'from', 'all'].includes(settings.sampleRange) ? settings.sampleRange : 'section');
+    const rangeMode = () => (['section', 'from', 'all', 'custom'].includes(settings.sampleRange) ? settings.sampleRange : 'section');
     const sampleRange = () => {
       const total = p.chords.length;
       if (rangeMode() === 'all') return [0, total];
+      if (rangeMode() === 'custom') {
+        const r = clampRange(settings.customFrom, settings.customTo, total);
+        return [r.from - 1, r.to];
+      }
       if (rangeMode() === 'from') return [idx, total];
       let from = 0;
       let to = total;
@@ -384,17 +442,19 @@ export function songsView() {
       }
       return [from, Math.max(to, from + 1)];
     };
-    const seconds = n => Math.round(n * feel.pulses * (60 / tempo / feel.group));
+    const seconds = n => Math.round(n * feel.pulses * (60 / bpmNow() / feel.group));
     const sampleLabel = () => {
       const [from, to] = sampleRange();
       const n = to - from;
-      return `▶ ${settings.sampleLoop ? 'Loop sample' : 'Play sample'} (${n} chord${n === 1 ? '' : 's'}, about ${seconds(n)} s${settings.sampleLoop ? ' each time round' : ''})`;
+      return `▶ ${settings.sampleLoop ? 'Loop sample' : 'Play sample'} (${n} chord${n === 1 ? '' : 's'}${prac.speed === 100 ? '' : `, at ${bpmNow()} bpm`}, about ${seconds(n)} s${settings.sampleLoop ? ' each time round' : ''})`;
     };
 
     const flash = pulse => dots.querySelectorAll('.pulse').forEach((d, i) => d.classList.toggle('on', i === pulse));
     const labelButtons = () => {
       metroBtn.textContent = running === 'metronome' ? '■ Stop metronome' : '▶ Metronome';
-      sampleBtn.textContent = running === 'sample' ? (settings.sampleLoop ? '■ Stop loop' : '■ Stop sample') : sampleLabel();
+      const text = running === 'sample' ? (settings.sampleLoop ? '■ Stop loop' : '■ Stop sample') : sampleLabel();
+      sampleBtn.textContent = text;
+      stagePlay.textContent = text;
     };
     const halt = () => {
       engine?.stop();
@@ -402,9 +462,25 @@ export function songsView() {
       running = null;
       flash(-1);
       status.textContent = '';
+      fall.halt();
       labelButtons();
+      drawFall();
     };
     stopPractice = halt;
+
+    // Falling notes, standing still on the selected chord (while a sample plays they follow the sample).
+    function drawFall() {
+      if (viewMode() !== 'fall' || running === 'sample') return;
+      const [from, to] = sampleRange();
+      fall.load(buildTimeline(Array.from({ length: to - from }, (_, k) => barFor(from + k)), feel, bpmNow(), from + 1, prac.hands));
+      fall.show((idx - from) * feel.pulses);
+    }
+    function applyView() {
+      board.hidden = viewMode() === 'fall';
+      stage.el.hidden = viewMode() !== 'fall';
+      if (viewMode() === 'fall') drawFall();
+      else fall.halt();
+    }
 
     function setTempo(value) {
       tempo = Math.max(30, Math.min(180, Math.round(value)));
@@ -412,6 +488,7 @@ export function songsView() {
       tempoLabel.textContent = `${tempo} bpm`;
       engine?.setBpm?.(tempo);
       labelButtons();
+      drawFall?.();
     }
 
     function toggleMetronome() {
@@ -419,8 +496,8 @@ export function songsView() {
       halt();
       if (wasOn) return;
       running = 'metronome';
-      engine = startMetronome({ feel, bpm: tempo, everyPulse: practice.everyPulse, onPulse: flash });
-      status.textContent = `Counting ${countText(feel)} at ${tempo} bpm`;
+      engine = startMetronome({ feel, bpm: bpmNow(), everyPulse: practice.everyPulse, onPulse: flash });
+      status.textContent = `Counting ${countText(feel)} at ${bpmNow()} bpm`;
       labelButtons();
     }
 
@@ -430,11 +507,12 @@ export function songsView() {
       if (wasOn) return;
       running = 'sample';
       const [from, to] = sampleRange();
-      const bars = Array.from({ length: to - from }, (_, k) => ({ plan: planAt(from + k) }));
+      const bars = Array.from({ length: to - from }, (_, k) => barFor(from + k));
       engine = playSample({
         bars,
         feel,
-        bpm: tempo,
+        bpm: bpmNow(),
+        hands: prac.hands,
         everyPulse: practice.everyPulse,
         countIn: practice.countIn,
         metronome: practice.clicks,
@@ -454,6 +532,10 @@ export function songsView() {
         },
       });
       labelButtons();
+      if (viewMode() === 'fall') {
+        fall.load(buildTimeline(bars, feel, bpmNow(), from + 1, prac.hands), { loop: Boolean(settings.sampleLoop) });
+        fall.run(() => engine?.pulse() ?? 0);
+      }
     }
 
     function applySuggestion() {
@@ -483,6 +565,16 @@ export function songsView() {
     setTempo(tempo);
     labelButtons();
     drawSuggestion();
+    const practicePanelSlot = h('div', {});
+    const rangeSeg = segmented([['section', 'This section'], ['from', 'From here'], ['all', 'Whole song'], ['custom', 'Bars…']], rangeMode(), v => {
+      settings.sampleRange = v;
+      saveSettings();
+      labelButtons();
+      drawFall();
+      panelCard?.refresh();
+      panelFull?.refresh();
+    }, 'What the sample plays');
+    const showRangeMode = () => rangeSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === rangeMode())));
     const practiceCard = h('section', { class: 'card practice' },
       suggestion,
       h('div', { class: 'tempo-row' },
@@ -498,12 +590,9 @@ export function songsView() {
       status,
       h('div', { class: 'tempo-row' },
         h('span', { class: 'style-label' }, 'Sample plays'),
-        segmented([['section', 'This section'], ['from', 'From here'], ['all', 'Whole song']], rangeMode(), v => {
-          settings.sampleRange = v;
-          saveSettings();
-          labelButtons();
-        }, 'What the sample plays')),
+        rangeSeg),
       h('div', { class: 'row wrap' }, metroBtn, sampleBtn),
+      practicePanelSlot,
       h('div', { class: 'settings-row' },
         toggle('Count every strum', practice.everyPulse, v => { practice.everyPulse = v; }),
         toggle('Count-in bar before the sample', practice.countIn, v => { practice.countIn = v; }),
@@ -515,10 +604,51 @@ export function songsView() {
           if (wasPlaying) halt(); // start again with the new setting
           labelButtons();
           if (wasPlaying) toggleSample();
+        }),
+        tune && toggle(hasBass(tune) ? 'Play my tune and bass line instead of the chords' : 'Play the tune (right hand) instead of the chord', useTune(), v => {
+          settings.useTune = v;
+          saveSettings();
+          const wasPlaying = running === 'sample';
+          if (wasPlaying) halt();
+          update();
+          if (wasPlaying) toggleSample();
         })),
+      tuneMismatch && h('p', { class: 'warn' }, 'This song has a tune, but it was entered with a different count than the song now has, so it is not used. Open “Tune” to look at it.'),
       h('p', { class: 'muted small' }, 'A chord sheet doesn’t say how long each chord lasts, so the sample gives every chord one bar. “This section” and “From here” start from the chord you have selected. The metronome and sample use your tempo; press Stop to end them.'));
     metroBtn.onclick = toggleMetronome;
     sampleBtn.onclick = toggleSample;
+    stagePlay.onclick = toggleSample;
+
+    // Practice: which bars, how fast, which hand. One panel in the Practice card and one in the full-screen falling notes.
+    const panelOptions = () => ({
+      count: () => p.chords.length,
+      range: () => { const [a, b] = sampleRange(); return { from: a + 1, to: b }; },
+      setRange: (a, b) => { settings.customFrom = a; settings.customTo = b; settings.sampleRange = 'custom'; saveSettings(); showRangeMode(); },
+      current: () => idx,
+      speed: () => prac.speed,
+      setSpeed: v => { prac.speed = cleanSpeed(v); settings.practiceSpeed = prac.speed; saveSettings(); },
+      hands: () => prac.hands,
+      setHands: v => { prac.hands = cleanHands(v); settings.practiceHands = prac.hands; saveSettings(); },
+      loop: () => Boolean(settings.sampleLoop),
+      setLoop: v => { settings.sampleLoop = v; saveSettings(); },
+      onChange: () => {
+        const wasPlaying = running === 'sample';
+        if (wasPlaying) halt();
+        labelButtons();
+        drawFall();
+        panelCard.refresh();
+        panelFull.refresh();
+        if (wasPlaying) toggleSample();
+      },
+    });
+    const panelCard = practicePanel(panelOptions());
+    const panelFull = practicePanel(panelOptions());
+    panelFull.el.classList.add('collapsible');
+    fall.setNames({ flats });
+    const stage = fallStage({ fall, title: 'Falling notes', controls: [h('div', { class: 'row wrap' }, stagePlay), panelFull.el] });
+    fill(practicePanelSlot, panelCard.el);
+    stopPractice = () => { halt(); stage.exit(); };
+    labelButtons();
 
     const tip = canHover()
       ? 'Hover over the chords below, or use ← → arrow keys. Space plays the chord.'
@@ -528,7 +658,11 @@ export function songsView() {
       header,
       h('div', { class: 'player-top' },
         now,
+        h('div', { class: 'row between view-row' },
+          segmented([['keys', 'Keyboards'], ['fall', 'Falling notes']], viewMode(), v => { settings.playerView = v; saveSettings(); applyView(); }, 'How to show the keys'),
+          tune && h('span', { class: 'muted small' }, useTune() ? 'Playing your tune' : 'Tune is off')),
         board,
+        stage.el,
         h('div', { class: 'row between controls' },
           h('button', { type: 'button', class: 'btn', 'aria-label': 'Previous chord', onclick: () => go(idx - 1, true) }, '◀ Prev'),
           counter,
@@ -555,6 +689,7 @@ export function songsView() {
       drawSuggestion();
     };
     update();
+    applyView();
     return view;
   }
 

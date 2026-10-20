@@ -1,5 +1,7 @@
 // Everything is saved in this browser's localStorage (per device).
 
+import { cleanPiece } from './piece.js';
+
 const PREFIX = 'chordcoach.';
 
 export function load(key, fallback) {
@@ -28,7 +30,16 @@ export const settings = Object.assign({
   style: 'bass',
   sampleRange: 'section',
   sampleLoop: false,
+  playerView: 'keys',
+  useTune: true,
+  tuneLength: 2,
   sheetSong: '',
+  tuneSong: '',
+  makerLane: 'lh',
+  sheetGuide: true,
+  sheetNames: false,
+  sheetKeySig: false,
+  sheetPerLine: 3,
   sheetMode: 'cheat',
   sheetStyle: 'bass',
   strumCount: '4',
@@ -59,3 +70,11 @@ export function loadSongs() {
 }
 
 export const saveSongs = songs => save('songs', songs);
+
+// Pieces made in the Maker tab (see js/piece.js).
+export function loadPieces() {
+  const raw = load('pieces', []);
+  return (Array.isArray(raw) ? raw : []).map(cleanPiece).filter(Boolean);
+}
+
+export const savePieces = pieces => save('pieces', pieces);

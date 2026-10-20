@@ -195,6 +195,11 @@ export function lhPattern(chord) {
   return [root, root + fifth, root + 12];
 }
 
+/** Easy bass: the root alone (the bass note for a slash chord), in the octave just below middle C so the hands stay close. */
+export function easyBass(chord) {
+  return nextAtOrAbove(chord.bassPc ?? chord.rootPc, 48);
+}
+
 export function inversionName(k) {
   return ['Root position', '1st inversion', '2nd inversion', '3rd inversion', '4th inversion'][k] ?? `Inversion ${k}`;
 }
@@ -341,6 +346,12 @@ export const STYLES = [
     play: 'Left hand: root → 5th → octave, one key at a time. Right hand: the whole chord together.',
   },
   {
+    id: 'easy',
+    name: 'Easy bass',
+    blurb: 'Left hand: just the root, one note held for the whole bar, just below middle C. Right hand: the whole chord together, so your hands stay close.',
+    play: 'Left hand: only the root, held for the bar. Right hand: the whole chord together.',
+  },
+  {
     id: 'broken',
     name: 'Chord + broken notes',
     blurb: 'Left hand: the whole chord together, one octave lower than the right hand. Right hand: the same chord notes one at a time, low to high.',
@@ -384,6 +395,9 @@ export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFA
       rh: { notes: right, together: true, note: 'on every count' },
     };
   }
+  if (style === 'easy') {
+    return { style, feel, lh: { notes: [easyBass(chord)], together: true, note: 'held for the whole bar' }, rh: { notes: right, together: true } };
+  }
   return { style: 'bass', feel, lh: { notes: lhPattern(chord), together: false }, rh: { notes: right, together: true } };
 }
 
@@ -412,7 +426,7 @@ export function gradeMarks(chord, marks, style = 'bass') {
     lh = { ...compare(blue, want), shape: blue.length > 0 && (orange.length === 0 || leftLower) };
     rh.shape = orange.length > 0 && (blue.length === 0 || leftLower);
   } else {
-    const goal = style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
+    const goal = style === 'easy' ? [easyBass(chord)] : style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
     const pool = goal.map(m => m % 12);
     let right = 0;
     for (const m of blue) {

@@ -556,7 +556,7 @@ main {
 
 /* ---------- Cheat sheets (the Sheets tab and printing) ---------- */
 
-body[data-tab="sheets"] .style-bar { display: none; }
+body[data-tab="sheets"] .style-bar, body[data-tab="maker"] .style-bar { display: none; }
 .sheets-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .sheets-controls p { margin: 0; flex-basis: 100%; }
 .sheet-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -686,3 +686,156 @@ body[data-tab="sheets"] .style-bar { display: none; }
 body[data-tab="sheets"] .volume { display: none; }
 @media (max-width: 420px) { .vol-label { display: none; } .volume input[type=range] { width: 84px; } }
 @media (min-width: 900px) { .volume { margin-right: 14px; } }
+
+/* ---------- Falling notes and the tune screen ---------- */
+
+.view-row { gap: 8px; flex-wrap: wrap; }
+.falling { display: block; width: 100%; border-radius: 10px; background: var(--surface-2); touch-action: pan-y; }
+.falling[hidden], .board[hidden] { display: none; }
+.song-chips .chip { position: relative; }
+.chip-num { position: absolute; top: 2px; left: 6px; font-size: 10px; font-weight: 700; color: var(--muted); line-height: 1; }
+.chip.active .chip-num { color: inherit; opacity: 0.8; }
+.tune-chips .chip.part { border-color: var(--rh); }
+.tune-chips .chip.full { border-color: var(--good); background: var(--good-soft); }
+.tune-chips .chip.full.active { background: var(--accent); }
+.tune { display: grid; gap: 12px; }
+.tune-bar { display: grid; gap: 10px; }
+.tune-bar h3 { margin: 0; }
+.tune-notes { display: flex; flex-wrap: wrap; gap: 6px; }
+.tune-note { min-height: 36px; padding: 6px 11px; font-size: 14px; border-color: var(--rh); }
+.tune-note.rest { border-style: dashed; border-color: var(--muted); color: var(--muted); }
+.tune-entry { display: grid; gap: 12px; }
+.tune-entry .seg { flex-wrap: wrap; }
+.tune-keys .kb-box { border-radius: 10px; }
+.good-text { color: var(--good); font-weight: 700; font-size: 14px; }
+
+/* Tune sheet pages */
+.tune-sheet { max-width: none !important; width: 100%; }
+.tune-sheet .tclef { font: 80px "Apple Symbols", "Noto Music", "Segoe UI Symbol", "Bravura Text", serif; fill: var(--text); }
+.tune-sheet .tclef.bass { font-size: 54px; }
+.tune-sheet .ttime { font: 800 28px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: middle; fill: var(--text); }
+.tune-sheet .tchord { font: 800 19px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; fill: var(--text); }
+.tune-sheet .tbarnum { font: 700 11px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; fill: var(--muted); }
+.tune-sheet .tacc { font: 700 22px "Apple Symbols", "Noto Music", "Segoe UI Symbol", system-ui, sans-serif; text-anchor: end; }
+.tune-sheet .trest { font: 34px "Apple Symbols", "Noto Music", "Segoe UI Symbol", "Bravura Text", serif; }
+.tune-sheet .flag { fill: none; stroke-width: 2.4; stroke-linecap: round; }
+.tune-sheet .stem { stroke-width: 2; }
+.tune-sheet .beam { stroke-width: 4.5; }
+.tune-sheet .line { stroke: #444; opacity: 1; stroke-width: 1.2; }
+.tune-sheet .bar { stroke: #444; stroke-width: 1.4; }
+.tune-sheet .bar.thick { stroke: #111; stroke-width: 2.6; }
+.tune-sheet .ledger { stroke: #333; stroke-width: 1.8; }
+.tune-sheet .head.open { fill: #fff; stroke-width: 2.4; }
+
+.tune-import { padding: 10px 14px; }
+.tune-import h3 { margin: 0; }
+.grid-gap { display: grid; gap: 8px; justify-items: start; }
+.grid-gap p { margin: 0; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The "pick by count" grid */
+.grid-wrap { overflow-x: auto; }
+.count-grid { display: grid; grid-template-columns: 58px repeat(var(--cols), minmax(26px, 1fr)); gap: 3px; align-items: stretch; min-width: min-content; }
+.count-grid .corner { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); align-self: end; font-weight: 700; }
+.count-head { text-align: center; font-weight: 700; font-size: 14px; color: var(--muted); padding-bottom: 2px; border-bottom: 2px solid var(--border); }
+.count-head.beat { color: var(--text); border-bottom-color: var(--accent); }
+.row-label { display: flex; align-items: center; justify-content: space-between; gap: 2px; font-weight: 700; font-size: 14px; padding: 0 6px; border-radius: 8px; color: var(--muted); }
+.row-label i { font-style: normal; color: var(--rh); font-size: 11px; }
+.row-label.chord-tone { background: var(--rh-soft); color: var(--text); }
+.row-label.rest-label { font-weight: 600; font-style: italic; }
+.cell { appearance: none; min-height: 36px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; padding: 0; touch-action: manipulation; }
+.cell.beat { border-left: 3px solid var(--muted); }
+.cell:hover { border-color: var(--muted); }
+.cell.on { background: var(--rh); border-color: var(--rh); }
+.cell.hold { background: var(--rh-soft); border-color: var(--rh); border-style: dashed; }
+.rest-label ~ .cell.on { background: var(--muted); border-color: var(--muted); }
+.rest-label ~ .cell.hold { background: var(--surface-2); border-color: var(--muted); }
+
+.tune-entry[hidden] { display: none; }
+.tune-import summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.tune-import[open] summary { margin-bottom: 8px; }
+
+.tune-fit { display: grid; gap: 8px; }
+.tune-fit p { margin: 0; }
+.tune-chips .chip.fit-good::after, .tune-chips .chip.fit-weak::after { content: ''; position: absolute; top: 5px; right: 6px; width: 8px; height: 8px; border-radius: 50%; }
+.tune-chips .chip.fit-good::after { background: var(--good); }
+.tune-chips .chip.fit-weak::after { background: var(--bad); }
+
+.row-label.outside { font-weight: 500; font-style: italic; opacity: 0.7; }
+
+/* Maker */
+.setup .field { display: grid; gap: 4px; justify-items: stretch; width: 100%; }
+.setup .grid-gap, .setup { justify-items: stretch; }
+.chord-input { width: 90px; padding: 6px 8px; font-size: 15px; }
+.maker { display: grid; gap: 12px; }
+.row-label.black-key { background: var(--key-black); color: #fff; }
+.row-label.c-key { font-weight: 800; color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.row-label.black-key.c-key { color: #fff; }
+.row-label.outside { opacity: 0.55; font-style: italic; }
+.count-head.half { font-size: 10px; color: var(--muted); }
+
+.tune-sheet .tie { fill: none; stroke-width: 1.8; stroke-linecap: round; }
+
+/* Type it */
+.type-entry { justify-items: stretch; }
+.type-lane { display: grid; gap: 6px; }
+.notation { min-height: 110px; font-size: 15px; }
+.notation-status p { margin: 2px 0; }
+.start-input { width: 80px; padding: 6px 8px; }
+
+.as-text { display: grid; gap: 6px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-2); }
+.text-bar { font-size: 14px; word-break: break-word; }
+
+/* Falling-notes stage: size and full screen */
+.fall-stage { display: grid; gap: 8px; }
+.fall-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.fall-top h3 { margin: 0; }
+.fall-controls { display: grid; gap: 8px; }
+.fall-controls:empty { display: none; }
+.fall-stage.full { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; gap: 8px; border-radius: 0; border: 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: var(--bg); overflow: hidden; }
+.fall-stage.full canvas.falling { flex: 1 1 0; min-height: 0; height: 0; border-radius: 8px; }
+.fall-stage.full .fall-controls { max-height: 42vh; overflow: auto; }
+.fall-stage:fullscreen { background: var(--bg); }
+body.fall-open { overflow: hidden; }
+.practice-panel { display: grid; gap: 8px; }
+.practice-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.practice-row input[type=range] { flex: 1; min-width: 100px; accent-color: var(--accent); }
+.practice-row .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.speed-label { min-width: 44px; font-variant-numeric: tabular-nums; }
+
+.fall-stage:not(.full) .full-only { display: none; }
+.fall-stage.full:not(.show-controls) .fall-controls .collapsible { display: none; }
+
+.fall-top .btn[aria-pressed="true"] { background: var(--surface-2); }
+
+/* Letter guide on the tune sheet */
+.tune-sheet .tguide { font: 700 8.5px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: end; fill: #555; }
+.tune-sheet .tguide.space { font-weight: 500; font-size: 8px; fill: #888; }
+.tune-sheet .tguide.used { font-size: 10px; font-weight: 800; }
+.tune-sheet .tguide.middle { font-size: 9px; fill: #333; }
+.tune-sheet .tguide-note { font: 600 6px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: end; fill: #888; }
+.tune-sheet .tname { font: 700 9px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+
+/* Read the note quiz */
+.note-quiz { justify-items: stretch; }
+.quiz-staff-box { display: grid; justify-items: center; }
+.quiz-staff { width: 100%; max-width: 340px; height: auto; }
+.quiz-staff .qline { stroke: var(--muted); stroke-width: 1.3; }
+.quiz-staff .qline.ledger { stroke: var(--text); stroke-width: 1.8; }
+.quiz-staff .qclef { font: 80px "Apple Symbols", "Noto Music", "Segoe UI Symbol", "Bravura Text", serif; fill: var(--text); }
+.quiz-staff .qclef.bass { font-size: 54px; }
+.quiz-staff .qhead { fill: none; stroke: var(--text); stroke-width: 3; }
+.quiz-staff .qacc { font: 700 24px "Apple Symbols", "Noto Music", "Segoe UI Symbol", system-ui, sans-serif; text-anchor: end; fill: var(--text); }
+.quiz-staff .qguide { font: 700 9px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: end; fill: var(--accent); }
+.quiz-staff .qguide.space { font-weight: 500; fill: var(--muted); }
+.chord-quiz[hidden], .note-quiz[hidden] { display: none; }
+.chord-quiz, .note-quiz { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+
+.tune-sheet .tsig { font: 700 22px "Apple Symbols", "Noto Music", "Segoe UI Symbol", system-ui, sans-serif; text-anchor: middle; fill: #111; }
+
+.tune-sheet .tfinger { font: 800 9px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+
+.lives { color: var(--bad); font-size: 20px; letter-spacing: 2px; }
+.lives .lost { color: var(--border); }
+.game-over { display: grid; gap: 8px; justify-items: start; padding: 12px 14px; border: 2px solid var(--bad); border-radius: 12px; background: var(--bad-soft); }
+.game-over h3, .game-over p { margin: 0; }
