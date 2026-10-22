@@ -1,7 +1,7 @@
 // App shell: tabs, shared-song links, offline support.
 
-import { h, toast } from './dom.js';
-import { unlock } from './audio.js';
+import { h, toast, toggle } from './dom.js';
+import { unlock, setMixing } from './audio.js';
 import { settings, saveSettings } from './store.js';
 import { chordsView } from './views/chords.js';
 import { songsView, decodeSongs } from './views/songs.js';
@@ -88,7 +88,10 @@ async function refreshApp() {
   } catch {}
   location.reload();
 }
-main.after(h('footer', { class: 'app-foot' }, versionLabel, h('button', { type: 'button', class: 'link-btn', onclick: refreshApp }, 'Refresh app')));
+setMixing(Boolean(settings.mixAudio));
+main.after(h('footer', { class: 'app-foot' },
+  toggle('Let videos and streams keep playing (mix with them; the phone’s silent switch then mutes this app)', Boolean(settings.mixAudio), v => { settings.mixAudio = v; saveSettings(); setMixing(v); toast(v ? 'Mixing with other sound. Sound will follow the phone’s silent switch.' : 'Normal sound.'); }),
+  versionLabel, h('button', { type: 'button', class: 'link-btn', onclick: refreshApp }, 'Refresh app')));
 showVersion();
 window.addEventListener('load', () => setTimeout(showVersion, 1500));
 

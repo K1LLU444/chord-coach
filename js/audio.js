@@ -18,13 +18,36 @@ export const liveGain = () => (out ? out.gain.value : null);
 export function setVolume(v, isMuted = muted) {
   volume = Math.min(1, Math.max(0, Number(v) || 0));
   muted = Boolean(isMuted);
+  setSilent(muted || volume === 0);
   if (out && ctx) out.gain.setTargetAtTime(targetGain(), ctx.currentTime, 0.02); // a short glide, so there are no clicks
 }
 
+// Silent: the app never creates or touches the device's sound system, so other sound (a video, a stream) is left alone.
+// Merely turning the gain to 0 isn't enough: on a phone, an open audio session can pause whatever else is playing.
+let silent = false;
+export const isSilent = () => silent;
+export function setSilent(on) {
+  silent = Boolean(on);
+  if (silent && ctx) {
+    try { ctx.close(); } catch {}
+    ctx = null;
+    out = null;
+  }
+}
+
+// Mixing: let other sound keep playing underneath (on an iPhone the phone's silent switch then mutes this app).
+let mixing = false;
+export const isMixing = () => mixing;
+export function setMixing(on) {
+  mixing = Boolean(on);
+  try { if (navigator.audioSession) navigator.audioSession.type = mixing ? 'ambient' : 'playback'; } catch {}
+}
+
 function ensure() {
+  if (silent) return null; // silent mode: no sound system at all
   if (!ctx) {
-    // Lets iPhone play sound even when the ring/silent switch is on silent (Safari 17+).
-    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+    // 'playback' lets an iPhone play sound even when the ring/silent switch is on silent (Safari 17+); 'ambient' mixes with other sound.
+    try { if (navigator.audioSession) navigator.audioSession.type = mixing ? 'ambient' : 'playback'; } catch {}
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     ctx = new AC();

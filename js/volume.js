@@ -25,9 +25,10 @@ export function volumeControl() {
   function sync() {
     const off = settings.muted || settings.volume === 0;
     slider.value = settings.volume;
-    label.textContent = off ? 'Muted' : `${settings.volume}%`;
+    label.textContent = off ? 'Silent' : `${settings.volume}%`;
     button.textContent = icon(settings.volume, settings.muted);
-    button.setAttribute('aria-label', off ? 'Unmute' : 'Mute');
+    button.setAttribute('aria-label', off ? 'Silent: no sound is made. Tap to turn sound on' : 'Sound is on. Tap for silent mode');
+    button.title = off ? 'Silent mode: the app makes no sound and does not touch your device’s audio, so videos and streams are not interrupted. Tap to turn sound on.' : 'Tap for silent mode (no sound at all, so videos and streams are not interrupted)';
     button.setAttribute('aria-pressed', String(off));
     applySavedVolume();
     saveSettings();

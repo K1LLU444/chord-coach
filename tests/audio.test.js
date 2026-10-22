@@ -27,3 +27,28 @@ test('setVolume remembers the level and the mute switch (before any sound has pl
   assert.equal(volumeState().volume, 0, 'a bad value cannot break it');
   setVolume(0.8, false);
 });
+
+import { isSilent, setSilent, isMixing, setMixing, playNote, createSession, audioNow } from '../js/audio.js';
+
+test('silent mode: muting (or a volume of 0) makes the app silent, and silent sounds do nothing', () => {
+  setVolume(0.5, false);
+  assert.equal(isSilent(), false);
+  setVolume(0.5, true);
+  assert.equal(isSilent(), true);
+  setVolume(0, false);
+  assert.equal(isSilent(), true);
+  setVolume(0.8, false);
+  assert.equal(isSilent(), false);
+  setSilent(true);
+  assert.doesNotThrow(() => playNote(60));
+  assert.equal(createSession().out, null); // no sound session is opened while silent
+  assert.equal(audioNow(), 0);
+  setSilent(false);
+});
+
+test('mixing with other sound can be switched on and off', () => {
+  setMixing(true);
+  assert.equal(isMixing(), true);
+  setMixing(false);
+  assert.equal(isMixing(), false);
+});

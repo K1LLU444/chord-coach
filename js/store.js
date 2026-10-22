@@ -27,6 +27,7 @@ export const settings = Object.assign({
   fingers: true,
   volume: 80,
   muted: false,
+  mixAudio: false,
   style: 'bass',
   sampleRange: 'section',
   sampleLoop: false,
