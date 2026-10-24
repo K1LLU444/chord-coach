@@ -9,6 +9,7 @@ import { analyzeSong, countText } from '../analyze.js';
 import { cleanFeel, lengthOptions, signatureOf } from '../rhythm.js';
 import { readMusicXml, scoreText } from '../musicxml.js';
 import { asText, typeEntry } from './type-entry.js';
+import { recordCard } from './record-card.js';
 import { currentStyle } from '../style.js';
 import { settings, saveSettings } from '../store.js';
 import { addNote, barFit, barToGrid, bassBars, bestBreak, candidateRows, chordFit, moveFrom, fitBars, gridToBar, isEmpty, keyName, keyScale, newMelody, noteText, prefersFlats, roomIn, undoNote } from '../melody.js';
@@ -265,6 +266,7 @@ export function tuneUI(song, { done, save, reopen }) {
 
   function draw() {
     drawChips();
+    recorder.refresh();
     drawFit();
     drawBar();
     drawKeys();
@@ -328,6 +330,26 @@ export function tuneUI(song, { done, save, reopen }) {
     saveSettings();
   }, 'How long the next note lasts, in counts');
 
+  // record a hand by playing it on the real piano
+  const recorder = recordCard({
+    getFeel: () => feel,
+    getBpm: () => analysis.feel.bpm,
+    sub: () => (melody.group === 1 ? 2 : 1),
+    startBar: () => bar,
+    barsLeft: () => p.chords.length - bar,
+    lanes: [
+      { id: 'lh', title: 'Left hand (the bass line)', has: (from, count) => bassBars(melody, p.chords.length).slice(from, from + count).some(b => b.some(n => n.m)) },
+      { id: 'rh', title: 'Right hand (the tune)', has: (from, count) => melody.bars.slice(from, from + count).some(b => b.some(n => n.m)) },
+    ],
+    defaultLane: 'rh',
+    apply: (laneId, bars, from, count) => {
+      const target = laneId === 'lh' ? bassBars(melody, p.chords.length) : melody.bars;
+      for (let i = 0; i < count; i++) target[from + i] = bars[i] ?? [];
+      commit();
+      draw();
+    },
+  });
+
   const el = h('div', { class: 'tune' },
     h('div', { class: 'row between player-head' },
       h('button', { type: 'button', class: 'btn small', onclick: () => { stop(); done(); } }, '‹ Back to song'),
@@ -352,6 +374,7 @@ export function tuneUI(song, { done, save, reopen }) {
     typeCard,
     gridCard,
     keysCard,
+    recorder.el,
     h('p', { class: 'muted small' }, 'Tip: the notes that sound are the keys you tap, in the octave shown on the keyboard (middle C is C4). Your tune plays with the left hand of your chosen playing style; the right hand plays the tune instead of the chord.'));
 
   fill(keysCard,

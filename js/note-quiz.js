@@ -59,22 +59,27 @@ export function gradeNote(progress, midi, ok) {
   return progress;
 }
 
-// ---------- the 3 lives game ----------
+// ---------- three tries for each note ----------
 
-export const MAX_LIVES = 3;
+export const TRIES = 3;
 
-/** A new round: 3 lives, nothing scored yet. `best` is the best round so far. */
-export const newGame = (best = 0) => ({ lives: MAX_LIVES, score: 0, best, over: false });
+/** A new note to answer: `max` tries (3, or 1 when the tries are switched off). */
+export const newTries = (max = TRIES) => ({ max, left: max, wrong: 0, done: false, correct: false });
 
-/** What happens after an answer: a right one scores, a wrong one costs a life, and with no lives left the round is over. */
-export function answerGame(game, ok) {
-  if (game.over) return game;
-  const next = { ...game };
-  if (ok) next.score++;
-  else next.lives--;
-  if (next.lives <= 0) {
-    next.over = true;
-    next.best = Math.max(next.best, next.score);
+/** After an answer: a right one ends the note; a wrong one costs a try, and with none left the note ends unsolved. */
+export function tryAnswer(t, ok) {
+  if (t.done) return t;
+  const next = { ...t };
+  if (ok) {
+    next.done = true;
+    next.correct = true;
+  } else {
+    next.left--;
+    next.wrong++;
+    if (next.left <= 0) next.done = true;
   }
   return next;
 }
+
+/** True when the note was answered right with no wrong try before it (only that counts as learned). */
+export const solvedFirstTry = t => t.done && t.correct && t.wrong === 0;

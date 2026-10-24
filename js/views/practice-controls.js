@@ -2,13 +2,14 @@
 
 import { h, fill, toggle } from '../dom.js';
 import { HANDS, SPEEDS, clampRange } from '../practice.js';
+import { piano } from '../midi.js';
 
 /**
  * count() → number of bars; range() → { from, to } (1-based); setRange(from, to);
  * current() → the selected bar (0-based); speed()/setSpeed(percent); hands()/setHands(id);
  * loop()/setLoop(bool); onChange() runs after any of them changes. Returns { el, refresh }.
  */
-export function practicePanel({ count, range, setRange, current, speed, setSpeed, hands, setHands, loop, setLoop, onChange }) {
+export function practicePanel({ count, range, setRange, current, speed, setSpeed, hands, setHands, loop, setLoop, onChange, wait = null, setWait = null }) {
   const el = h('div', { class: 'practice-panel' });
 
   function draw() {
@@ -37,7 +38,10 @@ export function practicePanel({ count, range, setRange, current, speed, setSpeed
       h('div', { class: 'practice-row' },
         h('span', { class: 'style-label' }, 'Hands'),
         ...HANDS.map(([id, name]) => h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hands() === id), onclick: () => { setHands(id); onChange(); draw(); } }, name))),
-      toggle('Loop these bars until I press Stop', loop(), v => { setLoop(v); onChange(); }));
+      toggle('Loop these bars until I press Stop', loop(), v => { setLoop(v); onChange(); }),
+      wait && setWait && toggle(piano.state.connected
+        ? '🎹 Wait for me: the notes stop until I press the right keys on my piano (choose the hand you play above)'
+        : '🎹 Wait for me (needs your piano connected: see the Piano tab)', Boolean(wait()) && piano.state.connected, v => { setWait(v); onChange(); }));
   }
 
   function drawLabel() {

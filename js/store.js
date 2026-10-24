@@ -27,6 +27,9 @@ export const settings = Object.assign({
   fingers: true,
   volume: 80,
   muted: false,
+  pianoSound: false,
+  pianoAuto: false,
+  waitPiano: false,
   mixAudio: false,
   style: 'bass',
   sampleRange: 'section',
@@ -52,6 +55,11 @@ export const settings = Object.assign({
   quizPool: 'basic',
   revealSound: true,
 }, load('settings', {}));
+
+// These start the same way every time the app is opened: Bass + chord playing style, and both hands.
+settings.style = 'bass';
+settings.practiceHands = 'both';
+settings.quizHands = 'both';
 
 export const saveSettings = () => save('settings', settings);
 

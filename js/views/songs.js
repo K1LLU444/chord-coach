@@ -14,6 +14,8 @@ import { fallStage } from './stage.js';
 import { practicePanel } from './practice-controls.js';
 import { clampRange, cleanHands, cleanSpeed, speedBpm } from '../practice.js';
 import { fingerBars } from '../fingering.js';
+import { piano } from '../midi.js';
+import { startWaitRun } from './wait-run.js';
 import { isEmpty as tuneIsEmpty, hasBass, keyName, prefersFlats } from '../melody.js';
 import { tuneUI } from './tune.js';
 import { settings, saveSettings, loadSongs, saveSongs, uid } from '../store.js';
@@ -508,6 +510,19 @@ export function songsView() {
       running = 'sample';
       const [from, to] = sampleRange();
       const bars = Array.from({ length: to - from }, (_, k) => barFor(from + k));
+      if (settings.waitPiano && piano.state.connected) {
+        // wait mode: the falling notes wait for the keys pressed on the real piano
+        if (viewMode() !== 'fall') { settings.playerView = 'fall'; saveSettings(); applyView(); }
+        engine = startWaitRun({
+          fall, timeline: buildTimeline(bars, feel, bpmNow(), from + 1, prac.hands), feel, bpm: bpmNow(), countIn: practice.countIn, loop: Boolean(settings.sampleLoop),
+          label: m => keyName(m, flats),
+          onBar: i => go(from + i, true, true),
+          onStatus: t => { status.textContent = t; },
+          onDone: stats => { go(from, true, true); halt(); status.textContent = `Done: ${stats.clean} of ${stats.steps} played right the first time, ${stats.wrong} wrong key${stats.wrong === 1 ? '' : 's'}.`; },
+        });
+        labelButtons();
+        return;
+      }
       engine = playSample({
         bars,
         feel,
@@ -631,6 +646,8 @@ export function songsView() {
       setHands: v => { prac.hands = cleanHands(v); settings.practiceHands = prac.hands; saveSettings(); },
       loop: () => Boolean(settings.sampleLoop),
       setLoop: v => { settings.sampleLoop = v; saveSettings(); },
+      wait: () => Boolean(settings.waitPiano),
+      setWait: v => { settings.waitPiano = v; saveSettings(); },
       onChange: () => {
         const wasPlaying = running === 'sample';
         if (wasPlaying) halt();
@@ -647,6 +664,7 @@ export function songsView() {
     fall.setNames({ flats });
     const stage = fallStage({ fall, title: 'Falling notes', controls: [h('div', { class: 'row wrap' }, stagePlay), panelFull.el] });
     fill(practicePanelSlot, panelCard.el);
+    piano.on(e => { if (e.type === 'status') { panelCard.refresh(); panelFull.refresh(); } });
     stopPractice = () => { halt(); stage.exit(); };
     labelButtons();
 

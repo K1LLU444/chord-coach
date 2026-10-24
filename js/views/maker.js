@@ -13,6 +13,10 @@ import { asText, typeEntry } from './type-entry.js';
 import { fallStage } from './stage.js';
 import { practicePanel } from './practice-controls.js';
 import { clampRange, cleanHands, cleanSpeed, speedBpm } from '../practice.js';
+import { piano } from '../midi.js';
+import { startWaitRun } from './wait-run.js';
+import { recordCard } from './record-card.js';
+import { keyName as noteLabel } from '../melody.js';
 
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const keyLabel = k => k || 'No key (show every key the same)';
@@ -101,7 +105,7 @@ export function makerView() {
     const playBtn = h('button', { type: 'button', class: 'btn primary' });
     const fromBtn = h('button', { type: 'button', class: 'btn' });
     const bpmLabel = h('span', { class: 'tempo-label' });
-    const options = { loop: false, countIn: true, metronome: true };
+    const options = { loop: false, countIn: true, metronome: true, wait: false };
     const practice = { from: 1, to: piece.bars, speed: cleanSpeed(settings.practiceSpeed), hands: cleanHands(settings.practiceHands) };
     const span = () => clampRange(practice.from, practice.to, piece.bars);
 
@@ -146,6 +150,18 @@ export function makerView() {
       const slice = pieceBars(piece).slice(from, to + 1);
       const f = feel();
       const bpm = speedBpm(piece.bpm, practice.speed);
+      if (options.wait && piano.state.connected) {
+        // wait mode: the notes wait for the keys pressed on the real piano
+        engine = startWaitRun({
+          fall, timeline: buildTimeline(slice, f, bpm, from + 1, practice.hands), feel: f, bpm, countIn: options.countIn, loop: options.loop,
+          label: m => noteLabel(m, flats),
+          onBar: i => { bar = from + i; drawChips(); },
+          onStatus: t => { status.textContent = t; },
+          onDone: stats => { halt(); status.textContent = `Done: ${stats.clean} of ${stats.steps} played right the first time, ${stats.wrong} wrong key${stats.wrong === 1 ? '' : 's'}.`; },
+        });
+        labelButtons();
+        return;
+      }
       fall.load(buildTimeline(slice, f, bpm, from + 1, practice.hands), { loop: options.loop });
       engine = playSample({
         bars: slice, feel: f, bpm, hands: practice.hands, metronome: options.metronome, everyPulse: false, countIn: options.countIn, loop: options.loop,
@@ -237,6 +253,7 @@ export function makerView() {
       if (practice.to === lastBars) practice.to = piece.bars; // a range that was the whole piece stays the whole piece
       lastBars = piece.bars;
       panel?.refresh();
+      recorder?.refresh();
       drawChips();
       barCard.hidden = entryMode !== 'grid';
       typeCard.hidden = entryMode !== 'type';
@@ -266,6 +283,8 @@ export function makerView() {
       setHands: v => { practice.hands = cleanHands(v); settings.practiceHands = practice.hands; saveSettings(); },
       loop: () => options.loop,
       setLoop: v => { options.loop = v; },
+      wait: () => options.wait,
+      setWait: v => { options.wait = v; },
       onChange: () => { if (engine) halt(); else drawFall(); labelButtons(); },
     });
     fall.setNames({ flats });
@@ -283,6 +302,27 @@ export function makerView() {
     });
     panel.el.classList.add('collapsible');
     stopFull = stage.exit;
+    piano.on(e => { if (e.type === 'status') panel.refresh(); });
+
+    // recording a hand by playing it on the real piano
+    const recorder = recordCard({
+      getFeel: feel,
+      getBpm: () => piece.bpm,
+      sub: () => piece.sub,
+      startBar: () => bar,
+      barsLeft: () => piece.bars - bar,
+      lanes: [
+        { id: 'lh', title: 'Left hand', has: (from, count) => piece.lh.slice(from, from + count).some(b => b.some(n => n.m)) },
+        { id: 'rh', title: 'Right hand', has: (from, count) => piece.rh.slice(from, from + count).some(b => b.some(n => n.m)) },
+      ],
+      defaultLane: 'rh',
+      apply: (laneId, bars, from, count) => {
+        const target = laneId === 'lh' ? piece.lh : piece.rh;
+        for (let i = 0; i < count; i++) target[from + i] = bars[i] ?? []; // bars after the last played note are emptied
+        commit();
+        draw();
+      },
+    });
 
     const meterName = METERS.find(m => m.pulses === piece.pulses && m.group === piece.group)?.id;
     const view = h('div', { class: 'maker' },
@@ -356,6 +396,7 @@ export function makerView() {
       segmented([['type', 'Type it'], ['grid', 'Tap squares']], entryMode, v => { entryMode = v; settings.makerEntry = v; saveSettings(); draw(); }, 'How to enter the music'),
       typeCard,
       barCard,
+      recorder.el,
       stage.el,
       h('button', {
         type: 'button', class: 'btn danger',

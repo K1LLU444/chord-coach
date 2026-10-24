@@ -58,6 +58,7 @@ export function fallingView() {
   let loop = false;
   let raf = 0;
   let last = 0; // the pulse that was drawn last, so a resize can redraw it
+  let live = { pressed: new Set(), required: new Set() }; // the real piano: keys down, and keys the music is waiting for
   let names = { on: true, flats: false, fingers: true }; // note names on the bars (Bb3 …) and finger numbers
   let layout = 'small'; // 'small' | 'medium' | 'large' | 'full' (fills its parent)
 
@@ -266,6 +267,22 @@ export function fallingView() {
       ctx.roundRect(x, hitY, w, blackH, [0, 0, 3, 3]);
       ctx.fill();
     }
+    // The real piano: a ring round the keys the music is waiting for, and the keys you have down (green when they are right).
+    for (const m of live.required) {
+      if (m < from || m > to) continue;
+      const { x, w } = geometry(m);
+      ctx.strokeStyle = colors.accent;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x + 1, hitY + 2, w - 2, (isBlack(m) ? blackH : kbH) - 6);
+    }
+    for (const m of live.pressed) {
+      if (m < from || m > to) continue;
+      const { x, w } = geometry(m);
+      ctx.fillStyle = live.required.has(m) || active.has(m) ? '#2fb463' : '#d9534f';
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(x + 1, hitY + 2, w - 2, (isBlack(m) ? blackH : kbH) - 6);
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeStyle = colors.text;
     ctx.globalAlpha = 0.5;
     ctx.lineWidth = 2;
@@ -304,6 +321,8 @@ export function fallingView() {
     setLayout(mode) { layout = mode; draw(last); },
     /** Note names and finger numbers on the bars: { on, flats, fingers } — any can be left out to keep it as it was. */
     setNames(next) { names = { ...names, ...next }; draw(last); },
+    /** The real piano: { pressed: Set of keys down, required: Set of keys the music waits for }. */
+    setLive(next) { live = { pressed: next.pressed ?? live.pressed, required: next.required ?? live.required }; draw(last); },
     redraw: () => draw(last),
   };
 }

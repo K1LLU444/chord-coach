@@ -66,22 +66,26 @@ test('progress: a right answer levels a note up, a wrong one sends it back', () 
   assert.equal(p[60].seen, 3);
 });
 
-import { newGame, answerGame, MAX_LIVES } from '../js/note-quiz.js';
+import { newTries, tryAnswer, solvedFirstTry, TRIES } from '../js/note-quiz.js';
 
-test('3 lives: a wrong answer costs a life, three wrong answers end the round, the best score is kept', () => {
-  let g = newGame(4);
-  assert.deepEqual(g, { lives: MAX_LIVES, score: 0, best: 4, over: false });
-  g = answerGame(g, true);
-  g = answerGame(g, true);
-  g = answerGame(g, false);
-  assert.deepEqual([g.lives, g.score, g.over], [2, 2, false]);
-  g = answerGame(g, true);
-  g = answerGame(g, false);
-  g = answerGame(g, false);
-  assert.deepEqual([g.lives, g.score, g.over, g.best], [0, 3, true, 4]); // 3 is below the old best of 4
-  assert.equal(answerGame(g, true), g); // nothing counts after the round is over
-  let h = newGame(2);
-  for (let i = 0; i < 5; i++) h = answerGame(h, true);
-  for (let i = 0; i < 3; i++) h = answerGame(h, false);
-  assert.equal(h.best, 5); // a better round becomes the best
+test('three tries for each note: a wrong answer costs a try, three wrong end the note, a right one ends it at once', () => {
+  let t = newTries();
+  assert.deepEqual(t, { max: TRIES, left: 3, wrong: 0, done: false, correct: false });
+  t = tryAnswer(t, false);
+  assert.deepEqual([t.left, t.wrong, t.done], [2, 1, false]);
+  t = tryAnswer(t, false);
+  t = tryAnswer(t, false);
+  assert.deepEqual([t.left, t.wrong, t.done, t.correct], [0, 3, true, false]); // out of tries: the answer is shown
+  assert.equal(tryAnswer(t, true), t); // nothing counts after the note is over
+  assert.equal(solvedFirstTry(t), false);
+  let u = tryAnswer(newTries(), true);
+  assert.deepEqual([u.done, u.correct, solvedFirstTry(u)], [true, true, true]);
+  u = tryAnswer(tryAnswer(newTries(), false), true); // right on the second try
+  assert.deepEqual([u.done, u.correct, solvedFirstTry(u)], [true, true, false]);
+});
+
+test('with the tries switched off a note gets a single try', () => {
+  let t = newTries(1);
+  t = tryAnswer(t, false);
+  assert.deepEqual([t.left, t.done, t.correct], [0, true, false]);
 });
