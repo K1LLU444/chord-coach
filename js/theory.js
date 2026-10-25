@@ -195,6 +195,15 @@ export function lhPattern(chord) {
   return [root, root + fifth, root + 12];
 }
 
+/**
+ * The notes an arpeggio plays: the main three of a chord (root, its 3rd or the 2nd/4th of a sus chord, and the 5th),
+ * so a 7th, 6th, 9th or 13th is left out and the pattern stays short.
+ */
+export function arpeggioPcs(chord) {
+  const main = chord.pcs.filter((_, i) => chord.type.degrees[i] <= 5);
+  return main.length >= 2 ? main : chord.pcs;
+}
+
 /** Easy bass: the root alone (the bass note for a slash chord), in the octave just below middle C so the hands stay close. */
 export function easyBass(chord) {
   return nextAtOrAbove(chord.bassPc ?? chord.rootPc, 48);
@@ -354,8 +363,8 @@ export const STYLES = [
   {
     id: 'arpeggio',
     name: 'Arpeggio',
-    blurb: 'Left hand: just the root, held for the whole bar. Right hand: the chord notes one at a time, up and then back down (the top note is the root again, an octave higher), one note on every count.',
-    play: 'Left hand: only the root, held for the bar. Right hand: the chord notes one at a time, up and back down, one on every count.',
+    blurb: 'Left hand: just the root, held for the whole bar. Right hand: the main notes of the chord (root, 3rd, 5th) one at a time, up and then back down, ending on the lowest note again an octave higher. One note on every count.',
+    play: 'Left hand: only the root, held for the bar. Right hand: the three main chord notes one at a time, up and back down, one on every count.',
   },
   {
     id: 'broken',
@@ -405,11 +414,14 @@ export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFA
     return { style, feel, lh: { notes: [easyBass(chord)], together: true, note: 'held for the whole bar' }, rh: { notes: right, together: true } };
   }
   if (style === 'arpeggio') {
-    // the chord notes from low to high, then the root again an octave up: played up and back down, one note on every count
+    // Only the main notes of the chord (see arpeggioPcs), from low to high, then the lowest one again an octave up:
+    // played up and back down, one note on every count. A fancy chord (7th, 9th, 6th) is kept to its three main notes.
+    const core = right.filter(m => arpeggioPcs(chord).includes(m % 12));
+    const notes = core.length >= 2 ? core : right;
     return {
       style, feel,
       lh: { notes: [easyBass(chord)], together: true, note: 'held for the whole bar' },
-      rh: { notes: [...right, right[0] + 12], together: false, note: 'up and back down, one note on every count' },
+      rh: { notes: [...notes, notes[0] + 12], together: false, note: 'up and back down, one note on every count' },
     };
   }
   return { style: 'bass', feel, lh: { notes: lhPattern(chord), together: false }, rh: { notes: right, together: true } };
@@ -433,7 +445,7 @@ export function gradeMarks(chord, marks, style = 'bass') {
     return { right: covered, wrong: keys.filter(m => !wantPcs.includes(m % 12)).length, missing: wantPcs.length - covered };
   };
 
-  const rh = compare(orange, chord.pcs);
+  const rh = compare(orange, style === 'arpeggio' ? arpeggioPcs(chord) : chord.pcs); // an arpeggio asks only for the main notes
   let lh;
   if (style === 'broken') {
     const want = [...new Set(chord.bass ? [...chord.pcs, chord.bassPc] : chord.pcs)];

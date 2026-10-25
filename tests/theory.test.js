@@ -239,9 +239,14 @@ test('Arpeggio: the left hand holds the root, the right hand rolls up the chord 
   assert.equal(events.find(e => e.hand === 'lh').len, 4); // held for the whole bar
   const six = { bpm: 69, pulses: 6, group: 3, hits: Array.from({ length: 6 }, () => ({ accent: false, soft: false, rest: false })) };
   assert.deepEqual(barEvents(plan, six).filter(e => e.hand === 'rh').map(e => e.notes[0]), [60, 64, 67, 72, 67, 64]); // up and back down
+  // a fancy chord keeps only its three main notes, so the pattern stays short
   const seventh = handPlan(parseChord('F7'), 'arpeggio');
-  assert.equal(seventh.rh.notes.length, 5);
-  assert.deepEqual(barEvents(seventh, six).filter(e => e.hand === 'rh').map(e => e.notes[0] % 12), [5, 9, 0, 3, 5, 3]);
+  assert.deepEqual(seventh.rh.notes.map(m => m % 12), [5, 9, 0, 5]); // F A C F: the E♭ (7th) is left out
+  assert.deepEqual(barEvents(seventh, six).filter(e => e.hand === 'rh').map(e => e.notes[0] % 12), [5, 9, 0, 5, 0, 9]);
+  const sus = handPlan(parseChord('E9sus4'), 'arpeggio');
+  assert.deepEqual([...new Set(sus.rh.notes.map(m => m % 12))].sort((a, b) => a - b), [4, 9, 11]); // E A B: the root, the 4th and the 5th only
+  assert.equal(sus.rh.notes.length, 4);
+  assert.equal(handPlan(parseChord('Am6'), 'arpeggio').rh.notes.length, 4);
   const slash = handPlan(parseChord('C/E'), 'arpeggio');
   assert.deepEqual(slash.lh.notes, [52]); // E3: the bass note of the slash chord
 });
@@ -252,4 +257,7 @@ test('Arpeggio in the quiz: the left hand is the root alone, the right hand is t
   assert.equal(ok.ok, true);
   const strum = gradeMarks(chord, new Map([[43, 'lh'], [50, 'lh'], [67, 'rh'], [70, 'rh'], [74, 'rh']]), 'arpeggio');
   assert.equal(strum.ok, false); // a 5th in the left hand is too much for this style
+  // a 7th chord only asks for its three main notes
+  const seventh = parseChord('F7');
+  assert.equal(gradeMarks(seventh, new Map([[41, 'lh'], [65, 'rh'], [69, 'rh'], [72, 'rh']]), 'arpeggio').ok, true);
 });

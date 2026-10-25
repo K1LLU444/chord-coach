@@ -1,7 +1,7 @@
 // Quiz tab: flashcards with spaced repetition. Chords you miss come back more often.
 
 import { h, segmented, toggle } from '../dom.js';
-import { CHORD_TYPES, ROOTS, TYPE_BY_ID, LH_RANGE, RH_RANGE, makeChord, rhVoicing, lhPattern, handPlan, noteLabeler, noteName, gradeMarks } from '../theory.js';
+import { arpeggioPcs, CHORD_TYPES, ROOTS, TYPE_BY_ID, LH_RANGE, RH_RANGE, makeChord, rhVoicing, lhPattern, handPlan, noteLabeler, noteName, gradeMarks } from '../theory.js';
 import { renderBoard, renderPanel, keyboardSVG } from '../keyboard.js';
 import { sheetElement } from '../sheet.js';
 import { playNote, playBoth, playChord, playSequence, playPlan } from '../audio.js';
@@ -372,7 +372,7 @@ export function quizView() {
         style === 'broken'
           ? `Pick a colour, then tap keys. Blue = left hand: the whole chord (${lhGoal.length} keys), one octave lower than the right hand. Orange = right hand: the same ${card.pcs.length} notes, played one at a time.`
           : style === 'arpeggio'
-            ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the ${card.pcs.length} chord notes (the root again an octave up is optional); they are played one at a time, up and back down.`
+            ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the ${arpeggioPcs(card).length} main chord notes (the lowest one again an octave up is optional); they are played one at a time, up and back down.`
           : style === 'easy'
             ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the whole chord (${card.pcs.length} different notes).`
           : style === 'strum'
