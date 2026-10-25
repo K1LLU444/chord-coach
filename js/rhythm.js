@@ -76,6 +76,12 @@ export function barEvents(plan, feel = DEFAULT_FEEL, tune = null, bass = null) {
     add(0, 'lh', plan.lh.notes, 0.7);
     if (pulses >= 4) add(half, 'lh', plan.lh.notes, 0.55);
     for (let i = 0; i < pulses; i++) add(i, 'rh', [plan.rh.notes[i % plan.rh.notes.length]], i % group === 0 ? 0.75 : 0.55);
+  } else if (plan.style === 'arpeggio') {
+    // Arpeggio: one root held for the whole bar; the right hand rolls up the chord and back down, one note on every pulse.
+    add(0, 'lh', [plan.lh.notes[0]], 0.8, pulses);
+    const up = plan.rh.notes; // chord notes low to high, ending on the root an octave up
+    const cycle = [...up, ...up.slice(1, -1).reverse()];
+    for (let i = 0; i < pulses; i++) add(i, 'rh', [cycle[i % cycle.length]], i % group === 0 ? 0.75 : 0.55);
   } else if (plan.style === 'easy') {
     // Easy bass: one root held for the whole bar; the chord is struck at the start and mid-bar.
     add(0, 'lh', [plan.lh.notes[0]], 0.8, pulses);

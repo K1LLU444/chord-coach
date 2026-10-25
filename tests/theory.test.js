@@ -225,3 +225,31 @@ test('every chord fits in one hand: no wider than 11 semitones, in every inversi
   const e13 = parseChord('E13');
   assert.deepEqual(rhVoicing(e13, 0).map(m => noteName(m)), ['E', 'G#', 'B', 'C#', 'D'], 'E13: the 13th (C#) sits below the 7th (D)');
 });
+
+
+test('Arpeggio: the left hand holds the root, the right hand rolls up the chord and back down, one note on every count', async () => {
+  const { barEvents, DEFAULT_FEEL } = await import('../js/rhythm.js');
+  const plan = handPlan(parseChord('C'), 'arpeggio');
+  assert.deepEqual(plan.lh.notes, [48]); // C3, held
+  assert.equal(plan.lh.together, true);
+  assert.deepEqual(plan.rh.notes, [60, 64, 67, 72]); // C4 E4 G4 and the root again, an octave up
+  assert.equal(plan.rh.together, false);
+  const events = barEvents(plan, DEFAULT_FEEL);
+  assert.deepEqual(events.filter(e => e.hand === 'rh').map(e => e.notes[0]), [60, 64, 67, 72]);
+  assert.equal(events.find(e => e.hand === 'lh').len, 4); // held for the whole bar
+  const six = { bpm: 69, pulses: 6, group: 3, hits: Array.from({ length: 6 }, () => ({ accent: false, soft: false, rest: false })) };
+  assert.deepEqual(barEvents(plan, six).filter(e => e.hand === 'rh').map(e => e.notes[0]), [60, 64, 67, 72, 67, 64]); // up and back down
+  const seventh = handPlan(parseChord('F7'), 'arpeggio');
+  assert.equal(seventh.rh.notes.length, 5);
+  assert.deepEqual(barEvents(seventh, six).filter(e => e.hand === 'rh').map(e => e.notes[0] % 12), [5, 9, 0, 3, 5, 3]);
+  const slash = handPlan(parseChord('C/E'), 'arpeggio');
+  assert.deepEqual(slash.lh.notes, [52]); // E3: the bass note of the slash chord
+});
+
+test('Arpeggio in the quiz: the left hand is the root alone, the right hand is the chord notes in any octave', () => {
+  const chord = parseChord('Gm');
+  const ok = gradeMarks(chord, new Map([[43, 'lh'], [67, 'rh'], [70, 'rh'], [74, 'rh']]), 'arpeggio');
+  assert.equal(ok.ok, true);
+  const strum = gradeMarks(chord, new Map([[43, 'lh'], [50, 'lh'], [67, 'rh'], [70, 'rh'], [74, 'rh']]), 'arpeggio');
+  assert.equal(strum.ok, false); // a 5th in the left hand is too much for this style
+});

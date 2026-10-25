@@ -345,7 +345,7 @@ export function quizView() {
         ? 'Almost! The notes are right, but the blue chord (left hand) should sit lower than the orange notes (right hand).'
         : style === 'strum'
           ? 'Almost! The notes are right, but the left hand is the root with its 5th above it.'
-          : style === 'easy'
+          : style === 'easy' || style === 'arpeggio'
             ? 'Almost! The notes are right, but the left hand is only the root, one key.'
             : 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.';
       message.replaceChildren(h('p', { class: 'bad' },
@@ -371,6 +371,8 @@ export function quizView() {
       h('p', { class: 'muted small mark-hint' },
         style === 'broken'
           ? `Pick a colour, then tap keys. Blue = left hand: the whole chord (${lhGoal.length} keys), one octave lower than the right hand. Orange = right hand: the same ${card.pcs.length} notes, played one at a time.`
+          : style === 'arpeggio'
+            ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the ${card.pcs.length} chord notes (the root again an octave up is optional); they are played one at a time, up and back down.`
           : style === 'easy'
             ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the whole chord (${card.pcs.length} different notes).`
           : style === 'strum'

@@ -352,6 +352,12 @@ export const STYLES = [
     play: 'Left hand: only the root, held for the bar. Right hand: the whole chord together.',
   },
   {
+    id: 'arpeggio',
+    name: 'Arpeggio',
+    blurb: 'Left hand: just the root, held for the whole bar. Right hand: the chord notes one at a time, up and then back down (the top note is the root again, an octave higher), one note on every count.',
+    play: 'Left hand: only the root, held for the bar. Right hand: the chord notes one at a time, up and back down, one on every count.',
+  },
+  {
     id: 'broken',
     name: 'Chord + broken notes',
     blurb: 'Left hand: the whole chord together, one octave lower than the right hand. Right hand: the same chord notes one at a time, low to high.',
@@ -398,6 +404,14 @@ export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFA
   if (style === 'easy') {
     return { style, feel, lh: { notes: [easyBass(chord)], together: true, note: 'held for the whole bar' }, rh: { notes: right, together: true } };
   }
+  if (style === 'arpeggio') {
+    // the chord notes from low to high, then the root again an octave up: played up and back down, one note on every count
+    return {
+      style, feel,
+      lh: { notes: [easyBass(chord)], together: true, note: 'held for the whole bar' },
+      rh: { notes: [...right, right[0] + 12], together: false, note: 'up and back down, one note on every count' },
+    };
+  }
   return { style: 'bass', feel, lh: { notes: lhPattern(chord), together: false }, rh: { notes: right, together: true } };
 }
 
@@ -406,6 +420,7 @@ export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFA
  * Right-hand notes may be in any octave or order (so any inversion works).
  * - 'bass' style: left hand must be root → 5th → octave (low to high), but may sit in any octave.
  * - 'strum' style: the same, but the left hand is only the root and its 5th.
+ * - 'easy' and 'arpeggio' styles: the left hand is only the root.
  * - 'broken' style: left hand is the chord notes, right hand the same notes, with the left hand lower than the right
  *   (the order the right hand plays them in can't be marked, so only the notes and their position are checked).
  */
@@ -426,7 +441,7 @@ export function gradeMarks(chord, marks, style = 'bass') {
     lh = { ...compare(blue, want), shape: blue.length > 0 && (orange.length === 0 || leftLower) };
     rh.shape = orange.length > 0 && (blue.length === 0 || leftLower);
   } else {
-    const goal = style === 'easy' ? [easyBass(chord)] : style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
+    const goal = style === 'easy' || style === 'arpeggio' ? [easyBass(chord)] : style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
     const pool = goal.map(m => m % 12);
     let right = 0;
     for (const m of blue) {
