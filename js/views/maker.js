@@ -193,7 +193,7 @@ export function makerView() {
     function drawGrid() {
       const f = feel();
       const sub = piece.sub;
-      const cells = barToGrid(lanes()[bar] ?? [], f.pulses, sub);
+      const cells = barToGrid(lanes()[bar] ?? [], f.pulses, sub, { chords: true });
       const low = base();
       const rows = [];
       const sc = scale();
@@ -212,10 +212,21 @@ export function makerView() {
         cells, pulses: f.pulses, sub, group: f.group, rows,
         onSet: (c, value) => {
           if (engine) halt();
-          cells[c] = cells[c] === value ? null : value;
+          const now = cells[c];
+          const keys = Array.isArray(now) ? now : now ? [now] : []; // the keys already on this count
+          let added = false;
+          if (value === 0) cells[c] = now === 0 ? null : 0; // the rest row: a rest, or clear it
+          else if (keys.includes(value)) {
+            const left = keys.filter(k => k !== value); // tapping a key that is on this count takes it off
+            cells[c] = left.length === 0 ? null : left.length === 1 ? left[0] : left;
+          } else {
+            added = true;
+            const all = settings.makerStack !== false ? [...keys, value].sort((a, b) => a - b) : [value]; // more keys on the same count make a chord
+            cells[c] = all.length === 1 ? all[0] : all;
+          }
           lanes()[bar] = gridToBar(cells, sub);
           commit();
-          if (cells[c] === value && value) playNote(value, 0, lane === 'lh' ? 1.8 : 1.4, 0.95);
+          if (added) [...(Array.isArray(cells[c]) ? cells[c] : [cells[c]])].forEach(k => playNote(k, 0, lane === 'lh' ? 1.8 : 1.4, 0.8));
           draw();
         },
       });
@@ -232,7 +243,8 @@ export function makerView() {
           h('h3', {}, `Bar ${bar + 1} of ${piece.bars}`),
           h('label', { class: 'row small' }, h('span', { class: 'muted' }, 'Chord name (optional)'), chordInput)),
         segmented([['lh', 'Left hand (bass)'], ['rh', 'Right hand (treble)']], lane, v => { lane = v; settings.makerLane = v; saveSettings(); draw(); }, 'Which hand to enter'),
-        h('p', { class: 'muted small' }, 'Tap a square to start that key on that count. It rings until your next note, and the “rest” row stops it. Tap again to remove it. Dimmed keys are outside the key; keys with black backgrounds are the black keys.'),
+        h('p', { class: 'muted small' }, 'Tap a square to start that key on that count. Tap more squares in the same column to play them together as a chord. It rings until your next note, and the “rest” row stops it. Tap a square again to remove it. Dimmed keys are outside the key; keys with black backgrounds are the black keys.'),
+        toggle('Several keys on one count make a chord (tap more squares in the same column)', settings.makerStack !== false, v => { settings.makerStack = v; saveSettings(); }),
         gridBox,
         asText({ bars: lanes, bar: () => bar, title: lane === 'lh' ? 'Left hand' : 'Right hand', flats }),
         h('div', { class: 'row between' },

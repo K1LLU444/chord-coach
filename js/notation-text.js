@@ -1,11 +1,12 @@
 // Typing music instead of tapping it: "Bb4:1 C5:1 D5:1 | Eb5:3 D5:2 C5:1 | r:3 F4:3".
 // A note is its letter, an optional ♭/♯ (b or #), its octave (middle C is C4), and ":" with its length in counts.
-// A rest is "r:" and a length. A length that is left out is the same as the one before. "|" starts the next bar.
+// Several keys on one count (a chord) are joined with + : C4+E4+G4:2. A rest is "r:" and a length.
+// A length that is left out is the same as the one before. "|" starts the next bar.
 
 import { noteName } from './theory.js';
 
 const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-const NOTE = /^([A-Ga-g])([#♯b♭]?)(-?\d)(?::(\d+(?:\.\d+)?))?$/;
+const ONE = /^([A-Ga-g])([#♯b♭]?)(-?\d)$/;
 const REST = /^[rR](?::(\d+(?:\.\d+)?))?$/;
 
 /**
@@ -30,25 +31,29 @@ export function parseNotation(text, pulses) {
       continue;
     }
     const rest = token.match(REST);
-    const note = token.match(NOTE);
-    if (!rest && !note) {
-      bad(`I can’t read “${token}”. A note looks like Bb4:2 (letter, octave, “:”, counts) and a rest like r:2.`);
+    const [body, ...lengthPart] = token.split(':');
+    const keys = rest ? [] : body.split('+').map(k => k.match(ONE));
+    if (!rest && (keys.some(k => !k) || lengthPart.length > 1)) {
+      bad(`I can’t read “${token}”. A note looks like Bb4:2 (letter, octave, “:”, counts), several keys on one count like C4+E4+G4:2, and a rest like r:2.`);
       continue;
     }
-    const given = (rest ? rest[1] : note[4]);
+    const given = rest ? rest[1] : lengthPart[0];
     if (given !== undefined) length = Number(given);
     if (!(length > 0) || Math.round(length * 2) !== length * 2) {
       bad(`“${token}” has a length of ${length}; use whole counts or half counts (1, 1.5, 2 …).`);
       continue;
     }
     let m = 0;
-    if (note) {
-      const accidental = note[2] === '#' || note[2] === '♯' ? 1 : note[2] === 'b' || note[2] === '♭' ? -1 : 0;
-      m = (Number(note[3]) + 1) * 12 + PC[note[1].toUpperCase()] + accidental;
-      if (m < 21 || m > 108) {
+    let more = [];
+    if (keys.length) {
+      const midis = keys.map(k => (Number(k[3]) + 1) * 12 + PC[k[1].toUpperCase()] + (k[2] === '#' || k[2] === '♯' ? 1 : k[2] === 'b' || k[2] === '♭' ? -1 : 0));
+      if (midis.some(x => x < 21 || x > 108)) {
         bad(`“${token}” is outside the piano (A0 to C8).`);
         continue;
       }
+      const sorted = [...new Set(midis)].sort((a, b) => a - b);
+      m = sorted[0];
+      more = sorted.slice(1);
       notes++;
     }
     const at = bars.length - 1;
@@ -58,7 +63,7 @@ export function parseNotation(text, pulses) {
       used[at] -= length;
       continue;
     }
-    bars[at].push({ m, d: length });
+    bars[at].push(more.length ? { m, d: length, with: more } : { m, d: length });
   }
   // trailing rests at the end of a bar are just silence
   for (const bar of bars) while (bar.length && bar.at(-1).m === 0) bar.pop();
@@ -78,8 +83,8 @@ function dedupe(errors) {
 /** Music as typed text again (to edit it): bars separated by “|”, a length written only when it changes. */
 export function notationOf(bars, flats = false) {
   let length = 1;
-  return bars.map(bar => bar.map(({ m, d }) => {
-    const name = m ? `${noteName(m, flats)}${Math.floor(m / 12) - 1}` : 'r';
+  return bars.map(bar => bar.map(({ m, d, with: more }) => {
+    const name = m ? [m, ...(more ?? [])].map(k => `${noteName(k, flats)}${Math.floor(k / 12) - 1}`).join('+') : 'r';
     const out = d === length && m ? name : `${name}:${d}`;
     length = d;
     return out;

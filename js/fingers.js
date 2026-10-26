@@ -40,6 +40,16 @@ export function fingerPlan(chord, plan) {
   return { lh, rh, map };
 }
 
+/** Fingers for keys pressed together (a chord you entered yourself), low to high: the right hand starts on the thumb, the left on the little finger. */
+export function blockFingers(n, hand) {
+  if (hand === 'lh') return leftChordFingers(n);
+  if (n <= 1) return [1];
+  if (n === 2) return [1, 5];
+  if (n === 3) return [1, 3, 5];
+  if (n === 4) return [1, 2, 3, 5];
+  return [1, 2, 3, 4, 5];
+}
+
 /** "5 · 2 · 1" for showing next to a hand's notes. */
 export const fingerText = fingers => fingers.join(' · ');
 

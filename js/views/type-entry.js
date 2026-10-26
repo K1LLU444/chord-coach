@@ -10,7 +10,7 @@ import { notationOf, parseNotation } from '../notation-text.js';
  * afterApply() runs once typed music has been put in.
  */
 export function typeEntry({ pulses, group, flats = false, lanes, barCount, extendTo, afterApply }) {
-  const example = group === 3 ? 'r:3 Bb4:1 C5 D5 | Eb5:3 D5:2 C5:1 | Bb4:6' : 'C4:1 E4 G4:2 | C5:4';
+  const example = group === 3 ? 'r:3 Bb4:1 C5 D5 | Eb5:3 D5:2 C5:1 | Bb4:6' : 'C4+E4+G4:2 G4:1 E4 | C5:4';
   const start = h('input', { class: 'input start-input', type: 'number', inputmode: 'numeric', min: 1, value: 1, 'aria-label': 'First bar to fill' });
   const startBar = () => Math.max(1, Math.round(Number(start.value)) || 1) - 1;
 
@@ -63,7 +63,7 @@ export function typeEntry({ pulses, group, flats = false, lanes, barCount, exten
   return h('div', { class: 'type-entry grid-gap' },
     h('p', { class: 'muted small' },
       'Type what you read on the sheet. A note is its letter, ♭ or ♯ written b or #, its octave (middle C is C4), then “:” and how many counts it lasts: ',
-      h('b', {}, 'Bb4:2'), '. A rest is ', h('b', {}, 'r:2'), '. Leave the length out to repeat the one before. Put ', h('b', {}, '|'), ' between bars. This bar holds ', h('b', {}, `${pulses} counts`), '.'),
+      h('b', {}, 'Bb4:2'), '. Several keys on one count (a chord) are joined with a plus: ', h('b', {}, 'C4+E4+G4:2'), '. A rest is ', h('b', {}, 'r:2'), '. Leave the length out to repeat the one before. Put ', h('b', {}, '|'), ' between bars. This bar holds ', h('b', {}, `${pulses} counts`), '.'),
     h('p', { class: 'muted small' }, 'Example: ', h('code', {}, example)),
     h('label', { class: 'row small' }, h('span', { class: 'muted' }, 'Start at bar'), start),
     sections);

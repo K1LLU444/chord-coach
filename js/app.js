@@ -1,7 +1,8 @@
 // App shell: tabs, shared-song links, offline support.
 
 import { h, toast, toggle } from './dom.js';
-import { settings, saveSettings } from './store.js';
+import { settings, saveSettings, load, save, loadSongs, saveSongs, loadPieces, savePieces } from './store.js';
+import { buildBackup, parseBackup, mergeBackup } from './backup.js';
 import { chordsView } from './views/chords.js';
 import { songsView, decodeSongs } from './views/songs.js';
 import { quizView } from './views/quiz.js';
@@ -93,9 +94,37 @@ async function refreshApp() {
   location.reload();
 }
 setMixing(Boolean(settings.mixAudio));
+
+// Save everything you made to one file, and load that file on another device (nothing is deleted when loading).
+const everything = () => ({ songs: loadSongs(), pieces: loadPieces(), quiz: load('quiz', {}), notes: load('notes', {}) });
+function saveBackup() {
+  const url = URL.createObjectURL(new Blob([buildBackup(everything())], { type: 'application/json' }));
+  const link = h('a', { href: url, download: `chord-coach-backup-${new Date().toISOString().slice(0, 10)}.json` });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast('Backup saved. Open it on your other device with “Load backup”.');
+}
+const backupFile = h('input', { type: 'file', accept: '.json,application/json', hidden: true, onchange: async e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  const incoming = parseBackup(await file.text());
+  if (incoming.error) return toast(incoming.error);
+  const merged = mergeBackup(everything(), incoming);
+  saveSongs(merged.songs);
+  savePieces(merged.pieces);
+  save('quiz', merged.quiz);
+  save('notes', merged.notes);
+  toast(`Loaded: ${incoming.songs.length} songs, ${incoming.pieces.length} pieces. Reloading…`);
+  setTimeout(() => location.reload(), 1200);
+} });
 main.after(h('footer', { class: 'app-foot' },
   toggle('Let videos and streams keep playing (mix with them; the phone’s silent switch then mutes this app)', Boolean(settings.mixAudio), v => { settings.mixAudio = v; saveSettings(); setMixing(v); toast(v ? 'Mixing with other sound. Sound will follow the phone’s silent switch.' : 'Normal sound.'); }),
-  versionLabel, h('button', { type: 'button', class: 'link-btn', onclick: refreshApp }, 'Refresh app')));
+  versionLabel, h('button', { type: 'button', class: 'link-btn', onclick: refreshApp }, 'Refresh app'),
+  h('button', { type: 'button', class: 'link-btn', onclick: saveBackup }, 'Save backup'),
+  h('button', { type: 'button', class: 'link-btn', onclick: () => backupFile.click() }, 'Load backup'), backupFile));
 showVersion();
 window.addEventListener('load', () => setTimeout(showVersion, 1500));
 

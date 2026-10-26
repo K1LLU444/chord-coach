@@ -59,3 +59,10 @@ test('half counts work, and typing the music back out gives the same music', () 
   assert.equal(notationOf(six.bars, true), 'r:3 Bb4:1 C5 D5 | Eb5:3 D5:2 C5:1');
   assert.equal(notationOf(six.bars, false), 'r:3 A#4:1 C5 D5 | D#5:3 D5:2 C5:1');
 });
+
+test('several keys on one count: C4+E4+G4:2 is one chord of two counts', () => {
+  const r = parseNotation('C4+E4+G4:2 G4:1 E4 | C5:4', 4);
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.bars[0], [{ m: 60, d: 2, with: [64, 67] }, { m: 67, d: 1 }, { m: 64, d: 1 }]);
+  assert.equal(notationOf(r.bars), 'C4+E4+G4:2 G4:1 E4 | C5:4');
+});

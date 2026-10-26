@@ -103,15 +103,17 @@ export function candidateRows(chord, scale, low, high, all = false) {
 
 /**
  * A bar's notes as cells: `sub` cells for each count (1 = a cell per count, 2 = half counts too), or null when the bar holds
- * notes that start or end between cells.
+ * notes that start or end between cells. With `chords`, several keys on one count are a list in that cell; without it, a bar
+ * holding such a chord gives null.
  */
-export function barToGrid(bar, pulses, sub = 1) {
+export function barToGrid(bar, pulses, sub = 1, { chords = false } = {}) {
   const size = pulses * sub;
   const cells = Array(size).fill(null);
   let at = 0;
-  for (const { m, d } of bar) {
+  for (const { m, d, with: more } of bar) {
     if (!Number.isInteger(at * sub) || !Number.isInteger(d * sub) || at * sub >= size) return null;
-    cells[at * sub] = m;
+    if (more?.length && !chords) return null; // several keys on a count need a grid that can show them
+    cells[at * sub] = more?.length ? [m, ...more] : m; // a chord is a list of keys, low to high
     at += d;
   }
   if (at * sub < size && at > 0) cells[at * sub] = 0; // the empty end of the bar is a rest
@@ -124,7 +126,14 @@ export function gridToBar(cells, sub = 1) {
   if (!onsets.length) return [];
   const bar = [];
   if (onsets[0] > 0) bar.push({ m: 0, d: onsets[0] / sub });
-  onsets.forEach((at, k) => bar.push({ m: cells[at], d: ((onsets[k + 1] ?? cells.length) - at) / sub }));
+  onsets.forEach((at, k) => {
+    const d = ((onsets[k + 1] ?? cells.length) - at) / sub;
+    const cell = cells[at];
+    if (Array.isArray(cell)) {
+      const keys = [...new Set(cell)].sort((a, b) => a - b);
+      bar.push(keys.length > 1 ? { m: keys[0], d, with: keys.slice(1) } : { m: keys[0], d });
+    } else bar.push({ m: cell, d });
+  });
   while (bar.length && bar.at(-1).m === 0) bar.pop();
   return bar;
 }

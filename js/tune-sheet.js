@@ -3,7 +3,7 @@
 // noteShape, beamGroups and layoutPage are plain logic (tested); tuneSheetSVG draws.
 
 import { noteName } from './theory.js';
-import { stepOf, stepLetter, ledgerSteps } from './sheet.js';
+import { stepOf, stepLetter, ledgerSteps, chordLayout } from './sheet.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const STEP = 5;
@@ -92,7 +92,7 @@ export function beamGroups(bar, feel) {
   bar.forEach((n, i) => {
     const start = at;
     at += n.d;
-    const kind = n.m ? noteShape(n.d, feel).kind : null;
+    const kind = n.m && !n.with?.length ? noteShape(n.d, feel).kind : null; // a chord is never beamed
     const short = kind === 'eighth' || kind === 'sixteenth';
     const beat = Math.floor(start / feel.group + 1e-9);
     if (short && current && current.beat === beat && current.end === start) {
@@ -157,7 +157,7 @@ function drawLane(g, { notes, staff, color, xAt, x0, barW, restShift, feel, flat
   const parts = [];
   notes.forEach((n, oi) => {
     const split = splitLength(n.d, feel);
-    split.forEach((d, k) => parts.push({ m: n.m, d, tied: n.m && k < split.length - 1, finger: k === 0 && fingerList ? fingerList[oi] || 0 : 0 }));
+    split.forEach((d, k) => parts.push({ m: n.m, with: n.with, d, tied: n.m && k < split.length - 1, finger: k === 0 && fingerList ? fingerList[oi] || 0 : 0 }));
   });
   notes = parts;
   const placed = [];
@@ -173,7 +173,7 @@ function drawLane(g, { notes, staff, color, xAt, x0, barW, restShift, feel, flat
     const alter = accidentalOf(name) === '♯' ? 1 : accidentalOf(name) === '♭' ? -1 : 0;
     return (sig.alters[name[0]] ?? 0) !== alter; // a note the key signature already covers has no sign of its own
   };
-  const signed = n => (everySign ? Boolean(n.m) && accidentalOf(noteName(n.m, flats)) !== '' : needsSign(n));
+  const signed = n => [n, ...(n.with ?? []).map(m => ({ m }))].some(k => (everySign ? Boolean(k.m) && accidentalOf(noteName(k.m, flats)) !== '' : needsSign(k)));
   for (let i = 1; i < placed.length; i++) {
     const gap = 14 + (signed(placed[i].n) ? 12 : 0); // room for the sign, clear of the stem of the note before
     if (placed[i].x - placed[i - 1].x < gap) placed[i].x = placed[i - 1].x + gap;
@@ -202,11 +202,59 @@ function drawLane(g, { notes, staff, color, xAt, x0, barW, restShift, feel, flat
     tipOf.set(items, up ? Math.min(...ys) - 7 * STEP : Math.max(...ys) + 7 * STEP);
   }
 
+  // Several keys on one count: stacked heads, one stem, the signs staggered to the left.
+  const drawChord = (n, x) => {
+    const shape = noteShape(n.d, feel);
+    const infos = [n.m, ...n.with].map(m => {
+      const name = noteName(m, flats);
+      const sign = accidentalOf(name);
+      const alter = sign === '♯' ? 1 : sign === '♭' ? -1 : 0;
+      return { name, sign, alter, octave: Math.floor((m - alter) / 12), step: stepOf(name, m) };
+    });
+    const layout = chordLayout(infos.map(k => k.step), staff.mid);
+    const dxOf = new Map(layout.notes.map(k => [k.step, k.dx]));
+    const steps = infos.map(k => k.step);
+    const lo = Math.min(...steps);
+    const hi = Math.max(...steps);
+    const open = shape.kind === 'whole' || shape.kind === 'half';
+    const columns = []; // the steps of the signs already placed in each column left of the heads
+    for (const k of infos) {
+      const hx = x + (dxOf.get(k.step) || 0) * 11;
+      for (const s of ledgerSteps(k.step, staff)) g.append(el('line', { x1: hx - 10, x2: hx + 10, y1: yOf(s), y2: yOf(s), class: 'ledger' }));
+      const mark = k.alter !== 0 && everySign ? k.sign : alterNow(k.name[0], k.octave) === k.alter ? '' : k.alter === 1 ? '♯' : k.alter === -1 ? '♭' : '♮';
+      current.set(`${k.name[0]}${k.octave}`, k.alter);
+      if (mark) {
+        let col = columns.findIndex(list => list.every(s => Math.abs(s - k.step) >= 5));
+        if (col < 0) col = columns.push([]) - 1;
+        columns[col].push(k.step);
+        const leftmost = Math.min(0, ...layout.notes.map(q => q.dx)) * 11;
+        g.append(el('text', { x: x + leftmost - 9 - col * 8, y: yOf(k.step) + (mark === '♭' ? 6 : 7), class: 'tacc', style: `fill:${color}` }, mark));
+      }
+      g.append(el('ellipse', {
+        cx: hx, cy: yOf(k.step), rx: 6.6, ry: 4.7, transform: `rotate(-20 ${hx} ${yOf(k.step)})`,
+        class: open ? 'head open' : 'head', style: open ? `stroke:${color}` : `fill:${color}`,
+      }));
+      if (shape.dots) g.append(el('circle', { cx: hx + 11, cy: yOf(k.step + (k.step % 2 === 0 ? 1 : 0)), r: 2, style: `fill:${color}` }));
+    }
+    if (shape.kind === 'whole') return;
+    const up = layout.up;
+    const sx = up ? x + 6.2 + (layout.notes.some(q => q.dx > 0) ? 11 : 0) : x - 6.2 - (layout.notes.some(q => q.dx < 0) ? 11 : 0);
+    const tip = up ? yOf(hi) - 7 * STEP : yOf(lo) + 7 * STEP;
+    g.append(el('line', { x1: sx, x2: sx, y1: yOf(up ? lo : hi), y2: tip, class: 'stem', style: `stroke:${color}` }));
+    if (shape.kind === 'eighth' || shape.kind === 'sixteenth') {
+      g.append(el('path', { d: up ? `M${sx} ${tip} q9 6 6 17` : `M${sx} ${tip} q9 -6 6 -17`, class: 'flag', style: `stroke:${color}` }));
+    }
+  };
+
   placed.forEach(({ n, x }, i) => {
     const shape = noteShape(n.d, feel);
     if (!n.m) {
       const whole = n.d >= pulses;
       drawRest(g, whole ? 'whole' : shape.kind, whole ? x0 + barW / 2 : x, whole ? 0 : shape.dots, color, restShift);
+      return;
+    }
+    if (n.with?.length) {
+      drawChord(n, x);
       return;
     }
     const name = noteName(n.m, flats);

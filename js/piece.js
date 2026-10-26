@@ -10,6 +10,7 @@ export const METERS = [
   { id: '4/4', label: '4/4 (four quarter-note counts)', pulses: 4, group: 1 },
   { id: '3/4', label: '3/4 (waltz: three counts)', pulses: 3, group: 1 },
   { id: '2/4', label: '2/4 (two counts)', pulses: 2, group: 1 },
+  { id: '6/4', label: '6/4 (six counts, each with an “&”: 1 & 2 & 3 & 4 & 5 & 6 &)', pulses: 6, group: 1 },
   { id: '6/8', label: '6/8 (1-2-3 4-5-6)', pulses: 6, group: 3 },
   { id: '9/8', label: '9/8 (1-2-3 4-5-6 7-8-9)', pulses: 9, group: 3 },
   { id: '12/8', label: '12/8 (four groups of three)', pulses: 12, group: 3 },

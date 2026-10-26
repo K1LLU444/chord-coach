@@ -95,3 +95,22 @@ test('changing the time signature: free when empty, only when the music keeps it
   assert.equal(p.pulses, 9);
   assert.equal(p.rh[0][0].d, 4);
 });
+
+test('6/4: six counts of quarter notes, with half counts for the "&" in between', () => {
+  const p = newPiece({ id: 'a', meter: '6/4', bars: 2 });
+  assert.deepEqual([p.pulses, p.group, p.sub], [6, 1, 2]); // 12 steps in a bar: 1 & 2 & 3 & 4 & 5 & 6 &
+  const four = newPiece({ id: 'c', meter: '4/4', bars: 1 });
+  four.rh[0] = [{ m: 60, d: 4 }];
+  assert.equal(changeMeter(four, '6/4').ok, true); // counted the same way (quarter notes), and the note still fits
+});
+
+test('a chord on one count: grid, events and falling notes keep every key', () => {
+  const bar = [{ m: 60, d: 2, with: [64, 67] }, { m: 72, d: 2 }];
+  assert.equal(barToGrid(bar, 4), null);
+  const cells = barToGrid(bar, 4, 1, { chords: true });
+  assert.deepEqual(cells[0], [60, 64, 67]);
+  assert.deepEqual(gridToBar(cells), bar);
+  const feel = { bpm: 60, pulses: 4, group: 1, hits: [] };
+  const ev = barEvents(null, feel, bar);
+  assert.deepEqual(ev.find(e => e.tune)?.notes, [60, 64, 67]);
+});

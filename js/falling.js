@@ -3,6 +3,7 @@
 
 import { h } from './dom.js';
 import { barEvents, eventSeconds, pulseSeconds } from './rhythm.js';
+import { blockFingers } from './fingers.js';
 import { noteName } from './theory.js';
 
 const BLACK = new Set([1, 3, 6, 8, 10]);
@@ -27,9 +28,10 @@ export function buildTimeline(bars, feel, bpm, firstBar = 1, hands = 'both') {
       const lineFinger = e.tune ? bar.tuneFingers?.[tuneAt++] : e.bass ? bar.bassFingers?.[bassAt++] : undefined;
       if (hands !== 'both' && e.hand !== hands) continue;
       const len = Math.min(eventSeconds(e, step) / step, feel.pulses * 2);
-      for (const midi of e.notes) {
-        notes.push({ midi, hand: e.hand, start: i * feel.pulses + e.pulse, len, finger: e.tune || e.bass ? lineFinger || null : bar.fingers?.get(midi) ?? null, tune: Boolean(e.tune) });
-      }
+      const together = (e.tune || e.bass) && e.notes.length > 1 ? blockFingers(e.notes.length, e.hand) : null; // keys on one count get hand-shape fingers
+      [...e.notes].sort((a, b) => a - b).forEach((midi, k) => {
+        notes.push({ midi, hand: e.hand, start: i * feel.pulses + e.pulse, len, finger: e.tune || e.bass ? (together ? together[k] : lineFinger) || null : bar.fingers?.get(midi) ?? null, tune: Boolean(e.tune) });
+      });
     }
   });
   return { notes, total: bars.length * feel.pulses, pulses: feel.pulses, group: feel.group, labels: bars.map(b => b.label ?? ''), firstBar };
