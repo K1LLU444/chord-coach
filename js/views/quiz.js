@@ -341,11 +341,13 @@ export function quizView() {
       if (strikes >= MAX_STRIKES) return finish(false);
       const left = MAX_STRIKES - strikes;
       const notesRight = hs.every(hand => !result[hand].wrong && !result[hand].missing);
-      const almost = style === 'broken'
+      const almost = plan.style === 'broken'
         ? 'Almost! The notes are right, but the blue chord (left hand) should sit lower than the orange notes (right hand).'
-        : style === 'strum'
+        : plan.style === 'split'
+          ? 'Almost! The notes are right, but the left hand keys should sit low, in one octave, with the right hand above them.'
+        : plan.style === 'strum'
           ? 'Almost! The notes are right, but the left hand is the root with its 5th above it.'
-          : style === 'easy' || style === 'arpeggio'
+          : plan.style === 'easy' || plan.style === 'arpeggio'
             ? 'Almost! The notes are right, but the left hand is only the root, one key.'
             : 'Almost! The notes are right, but the left hand goes root → 5th → octave, low to high, within one octave.';
       message.replaceChildren(h('p', { class: 'bad' },
@@ -369,13 +371,15 @@ export function quizView() {
       prompt('Find the keys for'),
       piano.state.connected ? h('p', { class: 'muted small' }, '🎹 Your piano is connected: play the keys on it and they are marked for you. The chord is accepted as soon as every key is right.') : '',
       h('p', { class: 'muted small mark-hint' },
-        style === 'broken'
+        plan.style === 'broken'
           ? `Pick a colour, then tap keys. Blue = left hand: the whole chord (${lhGoal.length} keys), one octave lower than the right hand. Orange = right hand: the same ${card.pcs.length} notes, played one at a time.`
-          : style === 'arpeggio'
+          : plan.style === 'split'
+            ? `Pick a colour, then tap keys. Blue = left hand: ${lhGoal.length} key${lhGoal.length === 1 ? '' : 's'} pressed together (${lhGoal.length === 1 ? 'the root' : 'the root and its 5th'}). Orange = right hand: ${rhGoal.length} keys pressed together, the chord's other notes.`
+          : plan.style === 'arpeggio'
             ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the ${arpeggioPcs(card).length} main chord notes (the lowest one again an octave up is optional); they are played one at a time, up and back down.`
-          : style === 'easy'
+          : plan.style === 'easy'
             ? `Pick a colour, then tap keys. Blue = left hand: 1 key, the root. Orange = right hand: the whole chord (${card.pcs.length} different notes).`
-          : style === 'strum'
+          : plan.style === 'strum'
             ? `Pick a colour, then tap keys. Blue = left hand: 2 keys, the root and its 5th above it. Orange = right hand: the whole chord (${card.pcs.length} different notes), struck on every count.`
             : `Pick a colour, then tap keys. Blue = left hand: 3 keys, root → 5th → octave. Orange = right hand: ${card.pcs.length} different notes.`),
       sheet, strikesEl, brushes, scroller, overview, message, actions);

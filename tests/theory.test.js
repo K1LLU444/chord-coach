@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseChord, lhPattern, rhVoicing, smoothVoicings, parseSong, noteLabeler, enharmonicHints, pcOf, RH_RANGE, gradeMarks, lhChord, handPlan, noteName,
+  CHORD_TYPES, TYPE_BY_ID, makeChord, parseChord, lhPattern, rhVoicing, smoothVoicings, parseSong, noteLabeler, enharmonicHints, pcOf, RH_RANGE, gradeMarks, lhChord, handPlan, noteName,
 } from '../js/theory.js';
 
 // The original beginner table: chord → left hand pattern, right hand triad.
@@ -260,4 +260,37 @@ test('Arpeggio in the quiz: the left hand is the root alone, the right hand is t
   // a 7th chord only asks for its three main notes
   const seventh = parseChord('F7');
   assert.equal(gradeMarks(seventh, new Map([[41, 'lh'], [65, 'rh'], [69, 'rh'], [72, 'rh']]), 'arpeggio').ok, true);
+});
+
+test('Split chord: no hand over 3 keys, every key together, every chord note is played', () => {
+  for (const type of CHORD_TYPES) {
+    for (const root of ['C', 'F#', 'Bb']) {
+      const chord = makeChord(root, type);
+      const plan = handPlan(chord, 'split');
+      assert.equal(plan.style, 'split');
+      assert.ok(plan.lh.notes.length <= 3 && plan.rh.notes.length <= 3, `${root}${type.suffix}`);
+      assert.ok(plan.lh.together && plan.rh.together);
+      const played = new Set([...plan.lh.notes, ...plan.rh.notes].map(m => m % 12));
+      for (const pc of chord.pcs) assert.ok(played.has(pc), `${root}${type.suffix} misses a note`);
+      assert.ok(Math.max(...plan.lh.notes) < Math.min(...plan.rh.notes), 'left hand below the right');
+    }
+  }
+  const triad = handPlan(makeChord('C', TYPE_BY_ID.maj), 'split');
+  assert.deepEqual(triad.lh.notes.map(m => m % 12), [0, 7]);
+  assert.deepEqual(triad.rh.notes.map(m => m % 12), [0, 4, 7]);
+});
+
+test('Split chord shapes: Amaj7 is A+E (left) and C♯ E G♯ (right); a flat-5th chord has just the root on the left', () => {
+  const a = makeChord('A', TYPE_BY_ID.maj7);
+  const full = handPlan(a, 'split');
+  assert.deepEqual(full.lh.notes.map(m => m % 12), [9, 4]);
+  assert.deepEqual(full.rh.notes.map(m => m % 12).sort((x, y) => x - y), [1, 4, 8]);
+  assert.deepEqual(handPlan(makeChord('C', TYPE_BY_ID.m7b5), 'split').lh.notes.map(m => m % 12), [0]);
+});
+
+test('Split chord is graded against its own keys', () => {
+  const a = makeChord('A', TYPE_BY_ID.maj7);
+  const marks = new Map([[45, 'lh'], [52, 'lh'], [61, 'rh'], [64, 'rh'], [68, 'rh']]);
+  assert.equal(gradeMarks(a, marks, 'split').ok, true);
+  assert.equal(gradeMarks(a, marks, 'bass').ok, false);
 });

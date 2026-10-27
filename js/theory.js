@@ -367,6 +367,12 @@ export const STYLES = [
     play: 'Left hand: only the root, held for the bar. Right hand: the three main chord notes one at a time, up and back down, one on every count.',
   },
   {
+    id: 'split',
+    name: 'Split chord',
+    blurb: 'Every key is pressed together, never more than 3 keys in a hand. Left hand: the root and its 5th. Right hand: the rest of the chord (a 3-note chord is played whole).',
+    play: 'Left hand: the root and its 5th together. Right hand: the rest of the chord together (no more than 3 keys).',
+  },
+  {
     id: 'broken',
     name: 'Chord + broken notes',
     blurb: 'Left hand: the whole chord together, one octave lower than the right hand. Right hand: the same chord notes one at a time, low to high.',
@@ -393,6 +399,30 @@ export function lhChord(chord) {
 }
 
 /**
+ * The Split chord shapes: every key is pressed together, never more than 3 keys in a hand.
+ * Left hand: the root and its 5th (a slash chord: its bass note; a flat 5th is left out, so the root alone).
+ * Right hand: a 3-note chord is played whole; a 4- or 5-note chord gives the root to the left hand (and a 5-note chord its 5th too).
+ * Returns { lh: midi[], rh: pitch classes[] }; the right-hand keys are picked from the chord's own voicing.
+ */
+export function splitShape(chord) {
+  const { intervals } = chord.type;
+  const pcOf_ = i => (chord.rootPc + i) % 12;
+  const slash = Boolean(chord.bass);
+  const root = nextAtOrAbove(chord.bassPc ?? chord.rootPc, LH_RANGE.from);
+  const fifth = intervals.includes(7) ? 7 : null;
+  const triadFifth = intervals.find(i => i >= 6 && i <= 8) ?? 7;
+  const lh = slash ? [root] : intervals.length === 3 ? [root, root + triadFifth] : fifth ? [root, root + 7] : [root];
+  let rh = intervals;
+  if (slash) {
+    if (intervals.length >= 4) rh = rh.filter(i => pcOf_(i) !== chord.bassPc);
+    if (rh.length > 3) rh = rh.filter(i => i !== fifth);
+  } else if (intervals.length >= 4) {
+    rh = rh.filter(i => i !== 0 && (i !== fifth || intervals.length === 4));
+  }
+  return { lh, rh: rh.map(pcOf_) };
+}
+
+/**
  * Which keys each hand plays, and whether they are pressed together (a chord) or one after another.
  * `rh` can supply a ready-made right-hand voicing (used by songs, which pick smooth inversions).
  * `feel` (see rhythm.js) says how a bar is counted; only the strum style and the sheet music depend on it.
@@ -409,6 +439,11 @@ export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFA
       lh: { notes: lhPattern(chord).slice(0, 2), together: false, note: 'count 1, then the middle of the bar' },
       rh: { notes: right, together: true, note: 'on every count' },
     };
+  }
+  if (style === 'split') {
+    const shape = splitShape(chord);
+    const notes = right.filter(m => shape.rh.includes(m % 12));
+    return { style, feel, lh: { notes: shape.lh, together: true, note: 'held for the whole bar' }, rh: { notes: notes.length ? notes : right, together: true } };
   }
   if (style === 'easy') {
     return { style, feel, lh: { notes: [easyBass(chord)], together: true, note: 'held for the whole bar' }, rh: { notes: right, together: true } };
@@ -437,6 +472,7 @@ export function handPlan(chord, style = 'bass', { inversion = 0, rh, feel = DEFA
  *   (the order the right hand plays them in can't be marked, so only the notes and their position are checked).
  */
 export function gradeMarks(chord, marks, style = 'bass') {
+  const split = style === 'split' ? handPlan(chord, style) : null;
   const blue = [...marks].filter(([, hand]) => hand === 'lh').map(([m]) => m).sort((a, b) => a - b);
   const orange = [...marks].filter(([, hand]) => hand === 'rh').map(([m]) => m);
 
@@ -445,7 +481,7 @@ export function gradeMarks(chord, marks, style = 'bass') {
     return { right: covered, wrong: keys.filter(m => !wantPcs.includes(m % 12)).length, missing: wantPcs.length - covered };
   };
 
-  const rh = compare(orange, style === 'arpeggio' ? arpeggioPcs(chord) : chord.pcs); // an arpeggio asks only for the main notes
+  const rh = compare(orange, style === 'arpeggio' ? arpeggioPcs(chord) : split?.style === style ? [...new Set(split.rh.notes.map(m => m % 12))] : chord.pcs); // an arpeggio asks only for the main notes; a split chord only for its right-hand notes
   let lh;
   if (style === 'broken') {
     const want = [...new Set(chord.bass ? [...chord.pcs, chord.bassPc] : chord.pcs)];
@@ -453,7 +489,7 @@ export function gradeMarks(chord, marks, style = 'bass') {
     lh = { ...compare(blue, want), shape: blue.length > 0 && (orange.length === 0 || leftLower) };
     rh.shape = orange.length > 0 && (blue.length === 0 || leftLower);
   } else {
-    const goal = style === 'easy' || style === 'arpeggio' ? [easyBass(chord)] : style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
+    const goal = split?.style === style ? split.lh.notes : style === 'easy' || style === 'arpeggio' ? [easyBass(chord)] : style === 'strum' ? lhPattern(chord).slice(0, 2) : lhPattern(chord);
     const pool = goal.map(m => m % 12);
     let right = 0;
     for (const m of blue) {

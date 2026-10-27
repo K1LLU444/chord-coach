@@ -82,6 +82,11 @@ export function barEvents(plan, feel = DEFAULT_FEEL, tune = null, bass = null) {
     const up = plan.rh.notes; // chord notes low to high, ending on the root an octave up
     const cycle = [...up, ...up.slice(1, -1).reverse()];
     for (let i = 0; i < pulses; i++) add(i, 'rh', [cycle[i % cycle.length]], i % group === 0 ? 0.75 : 0.55);
+  } else if (plan.style === 'split') {
+    // Split chord: the left hand's keys held together for the whole bar; the right hand's keys struck at the start and mid-bar.
+    add(0, 'lh', plan.lh.notes, 0.8, pulses);
+    add(0, 'rh', plan.rh.notes, 0.7);
+    if (pulses >= 4) add(half, 'rh', plan.rh.notes, 0.55);
   } else if (plan.style === 'easy') {
     // Easy bass: one root held for the whole bar; the chord is struck at the start and mid-bar.
     add(0, 'lh', [plan.lh.notes[0]], 0.8, pulses);
