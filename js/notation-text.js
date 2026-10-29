@@ -2,6 +2,7 @@
 // A note is its letter, an optional ♭/♯ (b or #), its octave (middle C is C4), and ":" with its length in counts.
 // Several keys on one count (a chord) are joined with + : C4+E4+G4:2. A rest is "r:" and a length.
 // A length that is left out is the same as the one before. "|" starts the next bar.
+// A "~" after a note holds it into the next bar (a tie): Bb4:1~ | Bb4:1 sounds once and lasts two counts.
 
 import { noteName } from './theory.js';
 
@@ -24,13 +25,19 @@ export function parseNotation(text, pulses) {
   while (tokens[0] === '|') tokens.shift();
   while (tokens.at(-1) === '|') tokens.pop();
   const bad = message => errors.push({ bar: bars.length, message });
-  for (const token of tokens) {
+  for (const raw of tokens) {
+    const tie = raw.length > 1 && raw.endsWith('~');
+    const token = tie ? raw.slice(0, -1) : raw;
     if (token === '|') {
       bars.push([]);
       used.push(0);
       continue;
     }
     const rest = token.match(REST);
+    if (tie && rest) {
+      bad('A rest can’t be tied. Put the “~” after a note, like Bb4:2~.');
+      continue;
+    }
     const [body, ...lengthPart] = token.split(':');
     const keys = rest ? [] : body.split('+').map(k => k.match(ONE));
     if (!rest && (keys.some(k => !k) || lengthPart.length > 1)) {
@@ -63,7 +70,7 @@ export function parseNotation(text, pulses) {
       used[at] -= length;
       continue;
     }
-    bars[at].push(more.length ? { m, d: length, with: more } : { m, d: length });
+    bars[at].push({ m, d: length, ...(more.length ? { with: more } : {}), ...(tie ? { tie: true } : {}) });
   }
   // trailing rests at the end of a bar are just silence
   for (const bar of bars) while (bar.length && bar.at(-1).m === 0) bar.pop();
@@ -83,10 +90,10 @@ function dedupe(errors) {
 /** Music as typed text again (to edit it): bars separated by “|”, a length written only when it changes. */
 export function notationOf(bars, flats = false) {
   let length = 1;
-  return bars.map(bar => bar.map(({ m, d, with: more }) => {
+  return bars.map(bar => bar.map(({ m, d, with: more, tie }) => {
     const name = m ? [m, ...(more ?? [])].map(k => `${noteName(k, flats)}${Math.floor(k / 12) - 1}`).join('+') : 'r';
     const out = d === length && m ? name : `${name}:${d}`;
     length = d;
-    return out;
+    return tie && m ? `${out}~` : out;
   }).join(' ')).join(' | ');
 }

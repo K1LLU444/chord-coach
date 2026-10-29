@@ -66,3 +66,13 @@ test('several keys on one count: C4+E4+G4:2 is one chord of two counts', () => {
   assert.deepEqual(r.bars[0], [{ m: 60, d: 2, with: [64, 67] }, { m: 67, d: 1 }, { m: 64, d: 1 }]);
   assert.equal(notationOf(r.bars), 'C4+E4+G4:2 G4:1 E4 | C5:4');
 });
+
+test('a ~ after a note ties it into the next bar, and the text comes back the same', () => {
+  const { bars, errors } = parseNotation('r:0.5 D#4:0.5 B4:2 A#4:1~ | A#4:0.5 D#4:3.5', 4);
+  assert.deepEqual(errors, []);
+  assert.equal(bars[0].at(-1).tie, true);
+  assert.equal(bars[1][0].tie, undefined);
+  assert.match(notationOf(bars), /~ \|/);
+  assert.deepEqual(parseNotation(notationOf(bars), 4).bars, bars);
+  assert.equal(parseNotation('r:2~', 4).errors.length, 1);
+});

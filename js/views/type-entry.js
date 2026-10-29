@@ -63,7 +63,7 @@ export function typeEntry({ pulses, group, flats = false, lanes, barCount, exten
   return h('div', { class: 'type-entry grid-gap' },
     h('p', { class: 'muted small' },
       'Type what you read on the sheet. A note is its letter, ♭ or ♯ written b or #, its octave (middle C is C4), then “:” and how many counts it lasts: ',
-      h('b', {}, 'Bb4:2'), '. Several keys on one count (a chord) are joined with a plus: ', h('b', {}, 'C4+E4+G4:2'), '. A rest is ', h('b', {}, 'r:2'), '. Leave the length out to repeat the one before. Put ', h('b', {}, '|'), ' between bars. This bar holds ', h('b', {}, `${pulses} counts`), '.'),
+      h('b', {}, 'Bb4:2'), '. Several keys on one count (a chord) are joined with a plus: ', h('b', {}, 'C4+E4+G4:2'), '. A rest is ', h('b', {}, 'r:2'), '. To hold a note into the next bar, put a ', h('b', {}, '~'), ' after it (', h('b', {}, 'Bb4:1~ | Bb4:2'), ': one press, three counts). Leave the length out to repeat the one before. Put ', h('b', {}, '|'), ' between bars. This bar holds ', h('b', {}, `${pulses} counts`), '.'),
     h('p', { class: 'muted small' }, 'Example: ', h('code', {}, example)),
     h('label', { class: 'row small' }, h('span', { class: 'muted' }, 'Start at bar'), start),
     sections);

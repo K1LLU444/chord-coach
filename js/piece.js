@@ -83,21 +83,72 @@ export function copyBar(piece, from, to) {
   piece.chords[to] = piece.chords[from];
 }
 
+const sameKeys = (a, b) => Boolean(a.m) && a.m === b.m && (a.with ?? []).join() === (b.with ?? []).join();
+
+/**
+ * A hand's bars with its ties worked out. A note marked `tie` that ends exactly at the bar line, and is followed by the same
+ * key(s) at the start of the next bar, is one held note: the first gets `hold` (the counts it goes on for) and the next gets
+ * `tieIn` (it is not struck again). A tie that doesn't fit that is dropped. The bars given are not changed.
+ */
+export function markTies(lane, pulses) {
+  const bars = lane.map(bar => bar.map(n => ({ ...n })));
+  bars.forEach((bar, i) => {
+    const last = bar.at(-1);
+    if (!last?.tie) return;
+    const next = bars[i + 1]?.[0];
+    if (bar.reduce((sum, n) => sum + n.d, 0) !== pulses || !next || !sameKeys(last, next)) delete last.tie;
+    else next.tieIn = true;
+  });
+  for (let i = bars.length - 2; i >= 0; i--) {
+    const last = bars[i].at(-1);
+    if (last?.tie) last.hold = bars[i + 1][0].d + (bars[i + 1][0].tie ? bars[i + 1][0].hold ?? 0 : 0);
+  }
+  return bars;
+}
+
+/** After a bar was rebuilt from the grid: keep the tie on its last note when that note is still the same key(s). */
+export function carryTie(before, after) {
+  const was = before.at(-1);
+  const now = after.at(-1);
+  if (was?.tie && now && sameKeys(was, now)) now.tie = true;
+}
+
 /** The tune and bass of a piece as bars for playing and for the falling notes. */
 export function pieceBars(piece) {
   // suggested fingers for each hand's line, one for each sounding note of a bar
   const long = piece.group === 1 ? 2 : 3; // counts in a note long enough to move the hand during it (a half note in 4/4, a dotted quarter in 6/8)
   const right = fingerBars(piece.rh, 'rh', piece.pulses, long);
   const left = fingerBars(piece.lh, 'lh', piece.pulses, long);
-  const sounding = (notes, fingers) => fingers.filter((_, j) => notes[j].m);
+  const rh = markTies(piece.rh, piece.pulses);
+  const lh = markTies(piece.lh, piece.pulses);
+  const sounding = (notes, fingers, tied = false) => fingers.filter((_, j) => notes[j].m && (tied || !notes[j].tieIn));
   return Array.from({ length: piece.bars }, (_, i) => ({
     plan: null,
-    tune: piece.rh[i].some(n => n.m) ? piece.rh[i] : null,
-    bass: piece.lh[i].some(n => n.m) ? piece.lh[i] : null,
-    tuneFingers: sounding(piece.rh[i], right[i]),
-    bassFingers: sounding(piece.lh[i], left[i]),
+    tune: rh[i].some(n => n.m) ? rh[i] : null,
+    bass: lh[i].some(n => n.m) ? lh[i] : null,
+    tuneFingers: sounding(rh[i], right[i]),
+    bassFingers: sounding(lh[i], left[i]),
+    tuneFingersAll: sounding(rh[i], right[i], true), // used when a slice starts on a tied note, which is then struck
+    bassFingersAll: sounding(lh[i], left[i], true),
     label: piece.chords[i] || '',
   }));
+}
+
+/** Bars `from` to `to` (0-based, inclusive) to play on their own: a note tied in from before the slice is struck, a tie out of it ends. */
+export function sliceBars(bars, from, to) {
+  const out = bars.slice(from, to + 1).map(bar => ({ ...bar }));
+  const strip = (notes, keys) => (notes ? notes.map(n => Object.fromEntries(Object.entries(n).filter(([k]) => !keys.includes(k)))) : notes);
+  if (out.length) {
+    const first = out[0];
+    first.tune = strip(first.tune, ['tieIn']);
+    first.bass = strip(first.bass, ['tieIn']);
+    first.tuneFingers = first.tuneFingersAll ?? first.tuneFingers;
+    first.bassFingers = first.bassFingersAll ?? first.bassFingers;
+    const last = out.at(-1);
+    last.tune = strip(last.tune, ['tie', 'hold']);
+    last.bass = strip(last.bass, ['tie', 'hold']);
+  }
+  return out;
 }
 
 /** How the piece is counted, in the form the player and the falling notes use. */

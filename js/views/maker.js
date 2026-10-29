@@ -6,7 +6,7 @@ import { playNote } from '../audio.js';
 import { playSample } from '../player.js';
 import { buildTimeline, fallingView } from '../falling.js';
 import { barToGrid, gridToBar, keyName, keyScale, prefersFlats } from '../melody.js';
-import { METERS, KEYS, MAX_BARS, addBars, changeMeter, copyBar, newPiece, pieceBars, pieceFeel, pieceIsEmpty, removeLastBar } from '../piece.js';
+import { METERS, KEYS, MAX_BARS, addBars, carryTie, changeMeter, copyBar, markTies, newPiece, pieceBars, pieceFeel, pieceIsEmpty, removeLastBar, sliceBars } from '../piece.js';
 import { settings, saveSettings, loadPieces, savePieces, uid } from '../store.js';
 import { drawCountGrid } from './count-grid.js';
 import { asText, typeEntry } from './type-entry.js';
@@ -147,7 +147,7 @@ export function makerView() {
     function play(from, to) {
       if (engine) return halt();
       if (pieceIsEmpty(piece)) return toast('Add some notes first.');
-      const slice = pieceBars(piece).slice(from, to + 1);
+      const slice = sliceBars(pieceBars(piece), from, to);
       const f = feel();
       const bpm = speedBpm(piece.bpm, practice.speed);
       if (options.wait && piano.state.connected) {
@@ -224,12 +224,32 @@ export function makerView() {
             const all = settings.makerStack !== false ? [...keys, value].sort((a, b) => a - b) : [value]; // more keys on the same count make a chord
             cells[c] = all.length === 1 ? all[0] : all;
           }
+          const before = lanes()[bar] ?? [];
           lanes()[bar] = gridToBar(cells, sub);
+          carryTie(before, lanes()[bar]);
           commit();
           if (added) [...(Array.isArray(cells[c]) ? cells[c] : [cells[c]])].forEach(k => playNote(k, 0, lane === 'lh' ? 1.8 : 1.4, 0.8));
           draw();
         },
       });
+    }
+
+    // A note that ends at the bar line can be held into the next bar (a tie): it is struck once and lasts through both.
+    function tieControl() {
+      const notes = lanes()[bar] ?? [];
+      const last = notes.at(-1);
+      const ends = Boolean(last?.m) && notes.reduce((sum, n) => sum + n.d, 0) === piece.pulses;
+      if (!ends || bar >= piece.bars - 1) {
+        return h('p', { class: 'muted small' }, 'Tie: to hold this bar’s last note into the next bar, the note has to reach the end of the bar (and there has to be a next bar).');
+      }
+      const joined = markTies(lanes(), piece.pulses)[bar + 1][0]?.tieIn;
+      return h('div', {},
+        toggle('Hold the last note into the next bar (a tie)', Boolean(last.tie), v => {
+          if (v) last.tie = true; else delete last.tie;
+          commit();
+          draw();
+        }),
+        last.tie && !joined ? h('p', { class: 'warn small' }, 'The next bar has to start with the same key(s), for as long as you want it held. Until then the tie does nothing.') : null);
     }
 
     // ----- the bar card -----
@@ -246,6 +266,7 @@ export function makerView() {
         h('p', { class: 'muted small' }, 'Tap a square to start that key on that count. Tap more squares in the same column to play them together as a chord. It rings until your next note, and the “rest” row stops it. Tap a square again to remove it. Dimmed keys are outside the key; keys with black backgrounds are the black keys.'),
         toggle('Several keys on one count make a chord (tap more squares in the same column)', settings.makerStack !== false, v => { settings.makerStack = v; saveSettings(); }),
         gridBox,
+        tieControl(),
         asText({ bars: lanes, bar: () => bar, title: lane === 'lh' ? 'Left hand' : 'Right hand', flats }),
         h('div', { class: 'row between' },
           h('button', { type: 'button', class: 'btn small', onclick: () => { if (lane === 'lh') lhBase = Math.max(24, lhBase - 12); else rhBase = Math.max(36, rhBase - 12); draw(); } }, '◀ Lower keys'),

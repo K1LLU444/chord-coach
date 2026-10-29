@@ -103,16 +103,17 @@ export function barEvents(plan, feel = DEFAULT_FEEL, tune = null, bass = null) {
   if (bass) {
     all = all.filter(e => e.hand !== 'lh');
     let at = 0;
-    for (const { m, d, with: extra } of bass) {
-      if (m) all.push({ pulse: at, hand: 'lh', notes: [m, ...(extra ?? [])], velocity: 0.8, len: Math.max(0.25, d * 0.98), bass: true });
+    for (const { m, d, with: extra, tieIn, hold = 0 } of bass) {
+      // a note tied from the bar before is not struck again; the note before it already lasts through this one (hold)
+      if (m && !tieIn) all.push({ pulse: at, hand: 'lh', notes: [m, ...(extra ?? [])], velocity: 0.8, len: Math.max(0.25, (d + hold) * 0.98), bass: true });
       at += d;
     }
   }
   if (tune) {
     all = all.filter(e => e.hand !== 'rh');
     let at = 0;
-    for (const { m, d, with: extra } of tune) {
-      if (m) all.push({ pulse: at, hand: 'rh', notes: [m, ...(extra ?? [])], velocity: 0.9, len: Math.max(0.25, d * 0.96), tune: true });
+    for (const { m, d, with: extra, tieIn, hold = 0 } of tune) {
+      if (m && !tieIn) all.push({ pulse: at, hand: 'rh', notes: [m, ...(extra ?? [])], velocity: 0.9, len: Math.max(0.25, (d + hold) * 0.96), tune: true });
       at += d;
     }
   }
@@ -191,7 +192,7 @@ export function cleanMelody(melody) {
       if (!(d >= 0.5) || used + d > pulses || (m !== 0 && (m < 21 || m > 108))) continue;
       // several keys on one count (a chord): m is the lowest key and `with` holds the others, low to high
       const keys = m && Array.isArray(n?.with) ? [...new Set([m, ...n.with.map(x => Math.round(Number(x))).filter(x => x >= 21 && x <= 108)])].sort((a, b) => a - b).slice(0, 6) : [m];
-      out.push(keys.length > 1 ? { m: keys[0], d, with: keys.slice(1) } : { m, d });
+      out.push({ m: keys[0], d, ...(keys.length > 1 ? { with: keys.slice(1) } : {}), ...(m && n?.tie === true ? { tie: true } : {}) });
       used += d;
     }
     return out;

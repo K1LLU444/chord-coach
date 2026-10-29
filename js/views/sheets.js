@@ -11,7 +11,7 @@ import { fingerBars } from '../fingering.js';
 import { isEmpty as tuneIsEmpty, prefersFlats } from '../melody.js';
 import { DEFAULT_FEEL } from '../rhythm.js';
 import { loadSongs, loadPieces, settings, saveSettings } from '../store.js';
-import { pieceFeel, pieceIsEmpty } from '../piece.js';
+import { markTies, pieceFeel, pieceIsEmpty } from '../piece.js';
 
 const PAGES = 5;
 const A4_WIDTH = 794; // pixels at 96 dpi
@@ -343,7 +343,9 @@ function piecePages(piece) {
   const long = piece.group === 1 ? 2 : 3;
   const rightFingers = fingerBars(piece.rh, 'rh', piece.pulses, long);
   const leftFingers = fingerBars(piece.lh, 'lh', piece.pulses, long);
-  const bars = piece.rh.map((melody, i) => ({ chord: fancy(piece.chords[i] || ''), melody, bassLine: piece.lh[i], bass: null, tuneFingers: rightFingers[i], bassFingers: leftFingers[i] }));
+  const rhBars = markTies(piece.rh, piece.pulses);
+  const lhBars = markTies(piece.lh, piece.pulses);
+  const bars = piece.rh.map((_, i) => ({ chord: fancy(piece.chords[i] || ''), melody: rhBars[i], bassLine: lhBars[i], bass: null, tuneFingers: rightFingers[i], bassFingers: leftFingers[i] }));
   return tunePagesFor({ title: piece.title, key: piece.key, bpm: piece.bpm, feel, bars, flats: prefersFlats(piece.key), signature: signatureOfFeel(feel, '') });
 }
 

@@ -114,3 +114,46 @@ test('a chord on one count: grid, events and falling notes keep every key', () =
   const ev = barEvents(null, feel, bar);
   assert.deepEqual(ev.find(e => e.tune)?.notes, [60, 64, 67]);
 });
+
+test('a tie holds a note over the bar line: struck once, one long note, never struck again', async () => {
+  const { markTies, sliceBars, carryTie } = await import('../js/piece.js');
+  const p = newPiece({ id: 't', meter: '4/4', bars: 3 });
+  p.rh[0] = [{ m: 0, d: 0.5 }, { m: 71, d: 2 }, { m: 70, d: 1.5, tie: true }];
+  p.rh[1] = [{ m: 70, d: 0.5 }, { m: 63, d: 3.5 }];
+  const marked = markTies(p.rh, 4);
+  assert.equal(marked[0][2].hold, 0.5);
+  assert.equal(marked[1][0].tieIn, true);
+  assert.equal(p.rh[1][0].tieIn, undefined); // the piece itself is not changed
+  const bars = pieceBars(p);
+  const first = barEvents(null, pieceFeel(p), bars[0].tune);
+  const second = barEvents(null, pieceFeel(p), bars[1].tune);
+  assert.equal(first.at(-1).len, (1.5 + 0.5) * 0.96); // one note that lasts through both bars
+  assert.deepEqual(second.map(e => e.notes[0]), [63]); // the tied note is not struck again
+  // playing from bar 2 on its own strikes the tied note
+  const alone = sliceBars(bars, 1, 1);
+  assert.deepEqual(barEvents(null, pieceFeel(p), alone[0].tune).map(e => e.notes[0]), [70, 63]);
+  // the line in the falling notes: one block that spans the bar line
+  const falling = buildTimeline(bars.slice(0, 2), pieceFeel(p), 100, 1).notes.filter(n => n.midi === 70);
+  assert.equal(falling.length, 1);
+  // a tie that doesn't line up is dropped: different keys, a note that stops short of the bar line, or no next bar
+  p.rh[1][0].m = 72;
+  assert.equal(markTies(p.rh, 4)[0][2].tie, undefined);
+  p.rh[1][0].m = 70;
+  p.rh[0][2].d = 1;
+  assert.equal(markTies(p.rh, 4)[1][0].tieIn, undefined);
+  p.rh[0][2].d = 1.5;
+  assert.equal(markTies([[{ m: 60, d: 4, tie: true }]], 4)[0][0].tie, undefined);
+  // editing the bar on the grid keeps the tie on the same last note
+  const after = gridToBar(barToGrid(p.rh[0], 4, 2), 2);
+  carryTie(p.rh[0], after);
+  assert.equal(after.at(-1).tie, true);
+});
+
+test('a tie survives saving and a chord can be tied', () => {
+  const p = newPiece({ id: 't', meter: '4/4', bars: 2 });
+  p.lh[0] = [{ m: 52, d: 4, with: [56, 59], tie: true }];
+  p.lh[1] = [{ m: 52, d: 4, with: [56, 59] }];
+  const back = cleanPiece(JSON.parse(JSON.stringify(p)));
+  assert.equal(back.lh[0][0].tie, true);
+  assert.equal(pieceBars(back)[0].bass[0].hold, 4);
+});

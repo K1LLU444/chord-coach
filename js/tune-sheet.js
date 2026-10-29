@@ -157,7 +157,7 @@ function drawLane(g, { notes, staff, color, xAt, x0, barW, restShift, feel, flat
   const parts = [];
   notes.forEach((n, oi) => {
     const split = splitLength(n.d, feel);
-    split.forEach((d, k) => parts.push({ m: n.m, with: n.with, d, tied: n.m && k < split.length - 1, finger: k === 0 && fingerList ? fingerList[oi] || 0 : 0 }));
+    split.forEach((d, k) => parts.push({ m: n.m, with: n.with, d, tied: n.m && k < split.length - 1, tieOut: Boolean(n.tie) && k === split.length - 1, tieIn: Boolean(n.tieIn) && k === 0, finger: k === 0 && fingerList ? fingerList[oi] || 0 : 0 }));
   });
   notes = parts;
   const placed = [];
@@ -302,6 +302,17 @@ function drawLane(g, { notes, staff, color, xAt, x0, barW, restShift, feel, flat
     const next = placed[i + 1].x;
     const y = yOf(step) + (up ? 9 : -9);
     g.append(el('path', { d: `M${x + 3} ${y} Q${(x + next) / 2} ${y + (up ? 9 : -9)} ${next - 3} ${y}`, class: 'tie', style: `stroke:${color}` }));
+  });
+  // a tie over the bar line: the first note's curve runs to the line, the next bar's note has the rest coming in from it
+  placed.forEach(({ n, x }) => {
+    if (!n.m || !(n.tieOut || n.tieIn)) return;
+    for (const key of [n.m, ...(n.with ?? [])]) {
+      const step = stepOf(noteName(key, flats), key);
+      const up = step < staff.mid;
+      const y = yOf(step) + (up ? 9 : -9);
+      const [from, to] = n.tieOut ? [x + 3, barEnd - 3] : [x0 + 3, x - 3];
+      g.append(el('path', { d: `M${from} ${y} Q${(from + to) / 2} ${y + (up ? 9 : -9)} ${to} ${y}`, class: 'tie', style: `stroke:${color}` }));
+    }
   });
   for (const items of beamed) {
     const up = stemUp.get(items);
