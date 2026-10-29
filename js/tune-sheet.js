@@ -328,7 +328,8 @@ function drawLane(g, { notes, staff, color, xAt, x0, barW, restShift, feel, flat
  */
 export function tuneSheetSVG({ lines, bars, feel, flats = false, firstLine = true, guide = true, noteNames = false, fingers = false, keyText = '', perLine = BARS_PER_LINE }) {
   const sig = keySignature(keyText);
-  const sigW = sig.letters.length * 8;
+  const SIG_START = 44; // the key signature starts this far right of the staff's edge: clear of the bass clef's two dots
+  const sigW = sig.letters.length ? sig.letters.length * 8 + (SIG_START - 32) : 0;
   const svg = el('svg', { viewBox: `0 0 ${WIDTH} ${lines.length * SYSTEM_H}`, class: 'sheet tune-sheet', role: 'img' });
   const blue = 'var(--lh)';
   const orange = 'var(--rh)';
@@ -340,7 +341,7 @@ export function tuneSheetSVG({ lines, bars, feel, flats = false, firstLine = tru
     svg.append(g);
     const first = row === 0 && firstLine;
     const x0 = guide ? 46 : 6; // where the staff starts; the strip to its left holds the letter guide
-    const left = x0 + (first ? 72 : 44) + sigW;
+    const left = x0 + (first ? 84 : 44) + sigW; // the first line also holds the time signature: room for a note’s ♯ or ♭ not to touch it
     const right = WIDTH - 6;
     const barW = (right - left) / perLine;
 
@@ -353,7 +354,7 @@ export function tuneSheetSVG({ lines, bars, feel, flats = false, firstLine = tru
     // the key signature after each clef: its flats or sharps apply to every note of that letter
     for (const clef of ['treble', 'bass']) {
       signaturePositions(sig, clef).forEach(({ step }, i) => {
-        g.append(el('text', { x: x0 + 32 + i * 8, y: yOf(step) + (sig.kind === 'flat' ? 6 : 7), class: 'tsig' }, sig.kind === 'flat' ? '♭' : '♯'));
+        g.append(el('text', { x: x0 + SIG_START + i * 8, y: yOf(step) + (sig.kind === 'flat' ? 6 : 7), class: 'tsig' }, sig.kind === 'flat' ? '♭' : '♯'));
       });
     }
 
